@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Petualangan IPAS Kelas 5 SD/MI</title>
+    <!-- Tailwind CSS for modern responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #f0fdf4 0%, #eff6ff 50%, #fdf2f8 100%);
+            min-height: 100vh;
+        }
+        .card-shadow {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+        }
+        .floating {
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes pulse-subtle {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        .pulse-btn {
+            animation: pulse-subtle 2s infinite;
+        }
+        /* Custom scrollbar for learning materials */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="text-slate-800 flex flex-col min-h-screen justify-between selection:bg-emerald-500 selection:text-white">
+
+    <div id="app" class="w-full max-w-4xl mx-auto p-4 sm:p-6 flex-grow flex flex-col justify-center">
+        <!-- Dynamic views will be mounted here -->
+    </div>
+
+    <footer class="w-full text-center py-4 text-xs sm:text-sm text-slate-500 border-t border-slate-200 bg-white/60 backdrop-blur-sm">
+        Pengembang: Giga Inovation | 081329200985
+    </footer>
+
+    <script>
+        // State Management
+        let gameState = {
+            step: 'welcome', // welcome, instructions, material, quiz, feedback, result, certificate
+            studentName: '',
+            currentQuestionIndex: 0,
+            score: 0,
+            correctCount: 0,
+            incorrectCount: 0,
+            selectedAnswer: null,
+            isAnswerChecked: false,
+            quizAnswers: {}, // index -> {selected, isCorrect}
+            activeTabBab: 'bab1'
+        };
+
+        // Speech Synthesis Helper in Indonesian
+        function speakText(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel(); // Stop previous speech
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'id-ID';
+                utterance.rate = 1.0;
+                utterance.pitch = 1.1; // Friendly tone for kids
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        // 50 Rich IPAS Grade 5 Questions (Distributed evenly: 12 Bab 1, 13 Bab 2, 13 Bab 3, 12 Bab 4)
+        const questionsData = [
+            // --- BAB 1: DI MANA INDONESIA BERADA? (12 Soal) ---
+            {
+                bab: 1,
+                question: "Indonesia dikenal sebagai negara kepulauan terbesar di dunia. Wilayah Indonesia secara keseluruhan terdiri dari luas daratan dan luas...",
+                options: [
+                    { key: 'A', text: 'Lautan yang sangat luas' },
+                    { key: 'B', text: 'Pegunungan berapi saja' },
+                    { key: 'C', text: 'Padang rumput savana' },
+                    { key: 'D', text: 'Gurun pasir bertingkat' }
+                ],
+                correct: 'A',
+                explanation: 'Indonesia memiliki wilayah perairan atau lautan yang jauh lebih luas dibandingkan daratannya, sehingga disebut negara kepulauan/maritim.'
+            },
+            {
+                bab: 1,
+                question: "Garis khatulistiwa atau garis bujur istimewa yang membelah bumi menjadi dua bagian melewati beberapa wilayah di Indonesia. Kota di Indonesia yang dilewati garis khatulistiwa adalah...",
+                options: [
+                    { key: 'A', text: 'Pontianak' },
+                    { key: 'B', text: 'Bandung' },
+                    { key: 'C', text: 'Surabaya' },
+                    { key: 'D', text: 'Denpasar' }
+                ],
+                correct: 'A',
+                explanation: 'Kota Pontianak di Kalimantan Barat dilalui oleh garis khatulistiwa (0 derajat), sehingga memiliki tugu khatulistiwa.'
+            },
+            {
+                bab: 1,
+                question: "Karena terletak di sekitar garis khatulistiwa, Indonesia mendapatkan iklim...",
+                options: [
+                    { key: 'A', text: 'Tropis dengan dua musim' },
+                    { key: 'B', text: 'Subtropis dengan empat musim' },
+                    { key: 'C', text: 'Dingin dan bersalju abadi' },
+                    { key: 'D', text: 'Kering dan beriklim gurun' }
+                ],
+                correct: 'A',
+                explanation: 'Negara di garis khatulistiwa beriklim tropis yang memiliki dua musim, yaitu musim hujan dan musim kemarau.'
+            },
+            {
+                bab: 1,
+                question: "Kenampakan alam daratan di Indonesia sangat beragam. Bentukan alam tinggi yang terbentuk dari aktivitas vulkanik disebut...",
+                options: [
+                    { key: 'A', text: 'Gunung' },
+                    { key: 'B', text: 'Selat' },
+                    { key: 'C', text: 'Teluk' },
+                    { key: 'D', text: 'Laut' }
+                ],
+                correct: 'A',
+                explanation: 'Gunung adalah kenampakan alam daratan yang tinggi, sebagian besar di Indonesia berupa gunung berapi (vulkanik).'
+            },
+            {
+                bab: 1,
+                question: "Perairan laut yang berada di antara dua pulau besar di Indonesia dinamakan...",
+                options: [
+                    { key: 'A', text: 'Selat' },
+                    { key: 'B', text: 'Dataran rendah' },
+                    { key: 'C', text: 'Danau' },
+                    { key: 'D', text: 'Pegunungan' }
+                ],
+                correct: 'A',
+                explanation: 'Selat adalah laut sempit yang menghubungkan dua pulau atau daratan, contohnya Selat Madura atau Selat Sunda.'
+            },
+            {
+                bab: 1,
+                question: "Masyarakat yang tinggal di wilayah pesisir pantai umumnya banyak yang bekerja sebagai...",
+                options: [
+                    { key: 'A', text: 'Nelayan' },
+                    { key: 'B', text: 'Petani teh di pegunungan' },
+                    { key: 'C', text: 'Pegawai kantoran kota' },
+                    { key: 'D', text: 'Pekerja tambang batu bara' }
+                ],
+                correct: 'A',
+                explanation: 'Letak geografis dekat laut membuat masyarakat pesisir memanfaatkan sumber daya laut dengan bekerja sebagai nelayan.'
+            },
+            {
+                bab: 1,
+                question: "Pulau-pulau besar di Indonesia meliputi Sumatra, Jawa, Kalimantan, Sulawesi, dan Papua. Pulau manakah yang wilayahnya paling luas di Indonesia?",
+                options: [
+                    { key: 'A', text: 'Papua dan Kalimantan' },
+                    { key: 'B', text: 'Jawa dan Bali' },
+                    { key: 'C', text: 'Madura dan Lombok' },
+                    { key: 'D', text: 'Bali dan Madura' }
+                ],
+                correct: 'A',
+                explanation: 'Papua dan Kalimantan adalah pulau-pulau dengan wilayah daratan terluas di Indonesia.'
+            },
+            {
+                bab: 1,
+                question: "Indonesia dijuluki sebagai 'Zamrud di Khatulistiwa'. Apa makna dari julukan tersebut?",
+                options: [
+                    { key: 'A', text: 'Keindahan alam yang hijau bagaikan permata zamrud di garis khatulistiwa' },
+                    { key: 'B', text: 'Penghasil batu permata terbesar di dunia' },
+                    { key: 'C', text: 'Wilayah yang tertutup salju abadi' },
+                    { key: 'D', text: 'Negara yang tidak memiliki tumbuhan hijau' }
+                ],
+                correct: 'A',
+                explanation: 'Julukan zamrud diberikan karena kekayaan alam dan hutan tropis yang hijau berkilau indah di garis khatulistiwa.'
+            },
+            {
+                bab: 1,
+                question: "Negara maritim adalah sebutan bagi negara yang memiliki... yang sangat luas.",
+                options: [
+                    { key: 'A', text: 'Perairan atau laut' },
+                    { key: 'B', text: 'Gurun pasir' },
+                    { key: 'C', text: 'Pegunungan es' },
+                    { key: 'D', text: 'Gedung pencakar langit' }
+                ],
+                correct: 'A',
+                explanation: 'Negara maritim adalah negara dengan perairan laut yang luas dan memiliki kedaulatan atas laut tersebut.'
+            },
+            {
+                bab: 1,
+                question: "Sifat tanah di Indonesia yang subur akibat aktivitas gunung berapi sangat mendukung kegiatan...",
+                options: [
+                    { key: 'A', text: 'Pertanian dan perkebunan' },
+                    { key: 'B', text: 'Pertambangan minyak di dasar laut' },
+                    { key: 'C', text: 'Pelayaran antar benua' },
+                    { key: 'D', text: 'Pembuatan garam laut' }
+                ],
+                correct: 'A',
+                explanation: 'Abu vulkanik gunung berapi membuat tanah subur, mendukung Indonesia sebagai negara agraris yang kuat dalam pertanian.'
+            },
+            {
+                bab: 1,
+                question: "Wilayah dataran rendah di Indonesia biasanya dimanfaatkan oleh penduduk untuk...",
+                options: [
+                    { key: 'A', text: 'Permukiman, pertanian sawah, dan pusat industri' },
+                    { key: 'B', text: 'Tempat peluncuran roket luar angkasa' },
+                    { key: 'C', text: 'Kawasan gletser salju abadi' },
+                    { key: 'D', text: 'Tambang es kutub' }
+                ],
+                correct: 'A',
+                explanation: 'Dataran rendah yang datar dan subur sangat ideal untuk tempat tinggal, persawahan, dan pembangunan pusat kegiatan.'
+            },
+            {
+                bab: 1,
+                question: "Bagaimana hubungan antara kondisi geografis wilayah Indonesia dengan keanekaragaman hayati?",
+                options: [
+                    { key: 'A', text: 'Kondisi tropis dan kepulauan menciptakan flora dan fauna yang sangat beragam' },
+                    { key: 'B', text: 'Menyebabkan wilayah Indonesia tandus tanpa tanaman' },
+                    { key: 'C', text: 'Hanya ada satu jenis hewan di seluruh pulau' },
+                    { key: 'D', text: 'Tidak ada pengaruh sama sekali' }
+                ],
+                correct: 'A',
+                explanation: 'Letak geografis yang strategis dan iklim tropis mendukung pertumbuhan berbagai jenis tumbuhan dan hewan yang melimpah.'
+            },
+
+            // --- BAB 2: MAJULAH DAERAHKU! (13 Soal) ---
+            {
+                bab: 2,
+                question: "Segala sesuatu yang diperlukan manusia untuk kelangsungan hidup serta kesejahteraannya disebut...",
+                options: [
+                    { key: 'A', text: 'Kebutuhan' },
+                    { key: 'B', text: 'Keinginan semata' },
+                    { key: 'C', text: 'Kemewahan' },
+                    { key: 'D', text: 'Hiasan dinding' }
+                ],
+                correct: 'A',
+                explanation: 'Kebutuhan adalah hal utama yang wajib dipenuhi manusia seperti makanan, pakaian, tempat tinggal, pendidikan, dan kesehatan.'
+            },
+            {
+                bab: 2,
+                question: "Contoh kebutuhan primer atau pokok yang harus dipenuhi oleh setiap manusia adalah...",
+                    options: [
+                    { key: 'A', text: 'Makanan, pakaian, dan rumah' },
+                    { key: 'B', text: 'Mobil sport mewah' },
+                    { key: 'C', text: 'Handphone keluaran terbaru' },
+                    { key: 'D', text: 'Perhiasan emas berlian' }
+                ],
+                correct: 'A',
+                explanation: 'Makanan, pakaian (sandang), dan rumah (papan) adalah kebutuhan pokok (primer) untuk bertahan hidup.'
+            },
+            {
+                bab: 2,
+                question: "Dalam ilmu ekonomi, barang dan jasa adalah alat untuk memenuhi kebutuhan manusia. Apa perbedaan utama antara barang dan jasa?",
+                options: [
+                    { key: 'A', text: 'Barang berwujud fisik dan bisa dipegang, sedangkan jasa berupa pelayanan atau keahlian' },
+                    { key: 'B', text: 'Barang tidak bisa dilihat, jasa bisa dibeli di toko' },
+                    { key: 'C', text: 'Barang harganya mahal, jasa selalu gratis' },
+                    { key: 'D', text: 'Tidak ada perbedaan sama sekali' }
+                ],
+                correct: 'A',
+                explanation: 'Barang memiliki bentuk fisik (buku, makanan), sedangkan jasa tidak berwujud fisik namun dirasakan manfaatnya (guru, dokter, tukang cukur).'
+            },
+            {
+                bab: 2,
+                question: "Kegiatan membuat atau menghasilkan suatu barang guna memenuhi kebutuhan disebut kegiatan...",
+                options: [
+                    { key: 'A', text: 'Produksi' },
+                    { key: 'B', text: 'Distribusi' },
+                    { key: 'C', text: 'Konsumsi' },
+                    { key: 'D', text: 'Investasi' }
+                ],
+                correct: 'A',
+                explanation: 'Produksi adalah kegiatan menghasilkan barang atau jasa. Contohnya petani menanam padi atau pabrik membuat baju.'
+            },
+            {
+                bab: 2,
+                question: "Penyaluran barang dari produsen kepada konsumen yang membutuhkan disebut kegiatan...",
+                options: [
+                    { key: 'A', text: 'Distribusi' },
+                    { key: 'B', text: 'Produksi' },
+                    { key: 'C', text: 'Konsumsi' },
+                    { key: 'D', text: 'Pemusnahan' }
+                ],
+                correct: 'A',
+                explanation: 'Distribusi adalah proses pengiriman barang dari tempat pembuatan ke pasar atau pembeli, dilakukan oleh distributor atau kurir.'
+            },
+            {
+                bab: 2,
+                question: "Kegiatan menghabiskan atau mengurangi nilai guna suatu barang dan jasa untuk memenuhi kebutuhan disebut...",
+                options: [
+                    { key: 'A', text: 'Konsumsi' },
+                    { key: 'B', text: 'Produksi' },
+                    { key: 'C', text: 'Distribusi' },
+                    { key: 'D', text: 'Tabungan' }
+                ],
+                correct: 'A',
+                explanation: 'Konsumsi adalah kegiatan menggunakan barang atau jasa. Contohnya kamu makan nasi atau memakai sepatu.'
+            },
+            {
+                bab: 2,
+                question: "Seorang petani di desa menghasilkan beras. Petani tersebut termasuk sebagai pelaku ekonomi pada bagian...",
+                options: [
+                    { key: 'A', text: 'Produsen' },
+                    { key: 'B', text: 'Konsumen' },
+                    { key: 'C', text: 'Distributor' },
+                    { key: 'D', text: 'Turis' }
+                ],
+                correct: 'A',
+                explanation: 'Petani yang menanam padi menghasilkan bahan makanan, sehingga posisinya adalah sebagai produsen.'
+            },
+            {
+                bab: 2,
+                question: "Mengapa jenis pekerjaan di setiap daerah di Indonesia bisa berbeda-beda?",
+                options: [
+                    { key: 'A', text: 'Karena disesuaikan dengan kondisi geografis dan sumber daya alam daerah tersebut' },
+                    { key: 'B', text: 'Karena dipilih secara acak oleh pemerintah' },
+                    { key: 'C', text: 'Karena semua orang menyukai pekerjaan yang sama' },
+                    { key: 'D', text: 'Karena tidak ada aturan bekerja' }
+                ],
+                correct: 'A',
+                explanation: 'Kondisi wilayah menentukan jenis pekerjaan; di pantai jadi nelayan, di pegunungan jadi petani kebun teh atau sayur.'
+            },
+            {
+                bab: 2,
+                question: "Bagaimana cara menjadi pelaku ekonomi yang bijak dalam mengelola keuangan?",
+                options: [
+                    { key: 'A', text: 'Mendahulukan kebutuhan yang penting daripada keinginan, serta gemar menabung' },
+                    { key: 'B', text: 'Menghabiskan seluruh uang saku untuk main game' },
+                    { key: 'C', text: 'Membeli semua barang yang diinginkan tanpa berpikir' },
+                    { key: 'D', text: 'Membuang-buang makanan yang dibeli' }
+                ],
+                correct: 'A',
+                explanation: 'Pelaku ekonomi yang bijak tahu membedakan kebutuhan pokok dan keinginan, serta terbiasa menyisihkan uang untuk menabung.'
+            },
+            {
+                bab: 2,
+                question: "Apa perbedaan antara 'kebutuhan' dan 'keinginan'?",
+                options: [
+                    { key: 'A', text: 'Kebutuhan harus dipenuhi agar bisa hidup, sedangkan keinginan adalah tambahan kepuasan yang bisa ditunda' },
+                    { key: 'B', text: 'Keinginan selalu lebih murah dari kebutuhan' },
+                    { key: 'C', text: 'Kebutuhan hanya berupa mainan mahal' },
+                    { key: 'D', text: 'Tidak ada bedanya' }
+                ],
+                correct: 'A',
+                explanation: 'Kebutuhan bersifat wajib untuk hidup (makanan, buku sekolah), sedangkan keinginan adalah hasrat memiliki barang tambahan (mainan baru, tas branded).'
+            },
+            {
+                bab: 2,
+                question: "Sikap boros dalam melakukan kegiatan ekonomi dapat berdampak buruk bagi...",
+                options: [
+                    { key: 'A', text: 'Keuangan pribadi dan kelestarian sumber daya alam' },
+                    { key: 'B', text: 'Kesehatan fisik menjadi sangat kuat' },
+                    { key: 'C', text: 'Negara menjadi cepat kaya' },
+                    { key: 'D', text: 'Lingkungan sekitar semakin bersih' }
+                ],
+                correct: 'A',
+                explanation: 'Sikap boros menghabiskan uang secara sia-sia dan seringkali menyia-nyiakan sumber daya alam yang terbatas.'
+            },
+            {
+                bab: 2,
+                question: "Kegiatan ekonomi yang ramah lingkungan contohnya adalah...",
+                options: [
+                    { key: 'A', text: 'Menggunakan kantong belanja yang bisa dipakai ulang dan tidak merusak alam' },
+                    { key: 'B', text: 'Membakar sampah plastik di halaman rumah' },
+                    { key: 'C', text: 'Menangkap ikan di sungai menggunakan racun potas' },
+                    { key: 'D', text: 'Menebang hutan secara liar untuk bangunan' }
+                ],
+                correct: 'A',
+                explanation: 'Pelaku ekonomi bijak selalu memperhatikan kelestarian lingkungan demi keberlangsungan hidup masa depan.'
+            },
+            {
+                bab: 2,
+                question: "Seorang pedagang pasar tradisional membeli sayuran dari petani untuk dijual kembali kepada pembeli di kota. Peran pedagang pasar tersebut adalah sebagai...",
+                options: [
+                    { key: 'A', text: 'Distributor dan penjual' },
+                    { key: 'B', text: 'Pembuat padi sawah' },
+                    { key: 'C', text: 'Konsumen tunggal' },
+                    { key: 'D', text: 'Pemerintah daerah' }
+                ],
+                correct: 'A',
+                explanation: 'Pedagang menyalurkan barang dari petani ke masyarakat, berperan sebagai distributor dalam rantai ekonomi.'
+            },
+
+            // --- BAB 3: HARMONI DALAM EKOSISTEM (13 Soal) ---
+            {
+                bab: 3,
+                question: "Hubungan timbal balik yang saling mempengaruhi antara makhluk hidup dengan lingkungannya disebut...",
+                options: [
+                    { key: 'A', text: 'Ekosistem' },
+                    { key: 'B', text: 'Ekonomi' },
+                    { key: 'C', text: 'Demografi' },
+                    { key: 'D', text: 'Geografi' }
+                ],
+                correct: 'A',
+                explanation: 'Ekosistem adalah kesatuan ruang yang didalamnya terdapat hubungan timbal balik antara makhluk hidup (biotik) dan benda tak hidup (abiotik).'
+            },
+            {
+                bab: 3,
+                question: "Komponen biotik dalam sebuah ekosistem terdiri atas...",
+                options: [
+                    { key: 'A', text: 'Semua makhluk hidup seperti tumbuhan, hewan, dan manusia' },
+                    { key: 'B', text: 'Batu, air, tanah, dan udara' },
+                    { key: 'C', text: 'Suhu, cahaya matahari, dan angin' },
+                    { key: 'D', text: 'Gedung, jalan raya, dan jembatan' }
+                ],
+                correct: 'A',
+                explanation: 'Komponen biotik adalah komponen hidup di dalam ekosistem, yaitu manusia, hewan, tumbuhan, dan mikroorganisme.'
+            },
+            {
+                bab: 3,
+                question: "Komponen abiotik yang sangat penting bagi kelangsungan hidup makhluk hidup di bumi meliputi...",
+                options: [
+                    { key: 'A', text: 'Air, udara, tanah, cahaya matahari, dan suhu' },
+                    { key: 'B', text: 'Hewan karnivora dan herbivora' },
+                    { key: 'C', text: 'Tumbuhan hijau berdaun lebar' },
+                    { key: 'D', text: 'Bakteri pengurai di dalam tanah' }
+                ],
+                correct: 'A',
+                explanation: 'Komponen abiotik adalah benda tak hidup di lingkungan yang mendukung kehidupan, seperti air, udara, tanah, dan matahari.'
+            },
+            {
+                bab: 3,
+                question: "Di dalam ekosistem sawah, manakah yang bertindak sebagai produsen?",
+                options: [
+                    { key: 'A', text: 'Padi atau tanaman hijau' },
+                    { key: 'B', text: 'Belalang pemakan daun' },
+                    { key: 'C', text: 'Katak pemakan serangga' },
+                    { key: 'D', text: 'Burung elang sawah' }
+                ],
+                correct: 'A',
+                explanation: 'Tumbuhan hijau disebut produsen karena dapat membuat makanan sendiri melalui proses fotosintesis.'
+            },
+            {
+                bab: 3,
+                question: "Peristiwa makan dan dimakan dengan urutan tertentu antar makhluk hidup disebut...",
+                options: [
+                    { key: 'A', text: 'Rantai makanan' },
+                    { key: 'B', text: 'Jaring-jaring kehidupan sosial' },
+                    { key: 'C', text: 'Siklus peredaran darah' },
+                    { key: 'D', text: 'Kegiatan ekonomi pasar' }
+                ],
+                correct: 'A',
+                explanation: 'Rantai makanan adalah urutan perpindahan energi makanan dari makhluk hidup satu ke makhluk hidup lain melalui proses makan dan dimakan.'
+            },
+            {
+                bab: 3,
+                question: "Kumpulan dari berbagai rantai makanan yang saling berhubungan di dalam suatu ekosistem dinamakan...",
+                options: [
+                    { key: 'A', text: 'Jaring-jaring makanan' },
+                    { key: 'B', text: 'Lingkungan abiotik' },
+                    { key: 'C', text: 'Populasi tunggal' },
+                    { key: 'D', text: 'Habitat buatan' }
+                ],
+                correct: 'A',
+                explanation: 'Jaring-jaring makanan terbentuk karena satu jenis hewan bisa memakan lebih dari satu jenis makanan atau dimangsa oleh berbagai pemangsa.'
+            },
+            {
+                bab: 3,
+                question: "Makhluk hidup yang bertugas menguraikan sisa-sisa makhluk hidup yang sudah mati menjadi zat hara tanah adalah...",
+                options: [
+                    { key: 'A', text: 'Pengurai atau dekomposer (seperti jamur dan bakteri)' },
+                    { key: 'B', text: 'Singa dan harimau hutan' },
+                    { key: 'C', text: 'Padi dan rumput hijau' },
+                    { key: 'D', text: 'Belalang dan ulat daun' }
+                ],
+                correct: 'A',
+                explanation: 'Pengurai (dekomposer) seperti jamur dan bakteri menguraikan bangkai atau sisa tumbuhan menjadi zat hara yang menyuburkan tanah.'
+            },
+            {
+                bab: 3,
+                question: "Apa peran utama manusia dalam menjaga keseimbangan ekosistem di bumi?",
+                options: [
+                    { key: 'A', text: 'Merawat lingkungan, melestarikan hewan/tumbuhan, serta mencegah pencemaran' },
+                    { key: 'B', text: 'Menebang seluruh pohon di hutan untuk perumahan' },
+                    { key: 'C', text: 'Membuang sampah plastik ke sungai agar bersih' },
+                    { key: 'D', text: 'Membiarkan hewan langka punah begitu saja' }
+                ],
+                correct: 'A',
+                explanation: 'Manusia memiliki akal budi untuk menjaga kelestarian alam dan menjaga keseimbangan ekosistem agar tetap harmonis.'
+            },
+            {
+                bab: 3,
+                question: "Tindakan manusia yang dapat merusak keseimbangan ekosistem adalah...",
+                options: [
+                    { key: 'A', text: 'Penebangan hutan secara liar dan perburuan hewan dilindungi' },
+                    { key: 'B', text: 'Melakukan reboisasi atau penanaman pohon kembali' },
+                    { key: 'C', text: 'Membuat suaka margasatwa dan cagar alam' },
+                    { key: 'D', text: 'Membersihkan sampah secara gotong royong' }
+                ],
+                correct: 'A',
+                explanation: 'Penebangan liar dan perburuan liar merusak habitat asli hewan dan tumbuhan, memicu kepunahan dan bencana.'
+            },
+            {
+                bab: 3,
+                question: "Dalam suatu rantai makanan di hutan: Rumput -> Rusa -> Harimau. Hewan harimau menduduki posisi sebagai...",
+                options: [
+                    { key: 'A', text: 'Konsumen tingkat tinggi (Karnivora/Puncak)' },
+                    { key: 'B', text: 'Produsen utama makanan' },
+                    { key: 'C', text: 'Pengurai zat tanah' },
+                    { key: 'D', text: 'Komponen abiotik hutan' }
+                ],
+                correct: 'A',
+                explanation: 'Harimau memakan rusa pemakan rumput, sehingga berada pada posisi konsumen puncak dalam rantai makanan.'
+            },
+            {
+                bab: 3,
+                question: "Mengapa keberadaan tumbuhan sangat penting bagi makhluk hidup lain di ekosistem?",
+                options: [
+                    { key: 'A', text: 'Karena menghasilkan oksigen untuk bernapas dan menyediakan sumber makanan' },
+                    { key: 'B', text: 'Karena menyerap seluruh oksigen di bumi' },
+                    { key: 'C', text: 'Karena membuat udara menjadi panas dan kering' },
+                    { key: 'D', text: 'Karena tidak memiliki manfaat apa pun' }
+                ],
+                correct: 'A',
+                explanation: 'Tumbuhan berfotosintesis menghasilkan oksigen segar dan makanan bagi herbivora, menjadi penyokong utama kehidupan.'
+            },
+            {
+                bab: 3,
+                question: "Contoh ekosistem buatan yang sengaja dibuat oleh manusia untuk keperluan tertentu adalah...",
+                options: [
+                    { key: 'A', text: 'Kolam ikan dan sawah' },
+                    { key: 'B', text: 'Hutan hujan tropis alami' },
+                    { key: 'C', text: 'Laut lepas samudra' },
+                    { key: 'D', text: 'Sungai pegunungan asli' }
+                ],
+                correct: 'A',
+                explanation: 'Kolam ikan, waduk, dan sawah adalah ekosistem buatan karena campur tangan manusia dalam pembuatannya.'
+            },
+            {
+                bab: 3,
+                question: "Jika salah satu komponen dalam rantai makanan mengalami kepunahan, apa akibatnya bagi komponen lain?",
+                options: [
+                    { key: 'A', text: 'Keseimbangan ekosistem akan terganggu dan populasi hewan lain bisa meledak atau punah' },
+                    { key: 'B', text: 'Ekosistem akan menjadi semakin subur otomatis' },
+                    { key: 'C', text: 'Tidak ada pengaruh apa pun' },
+                    { key: 'D', text: 'Jumlah makanan akan bertambah banyak' }
+                ],
+                correct: 'A',
+                explanation: 'Rantai makanan saling mengait; jika satu terputus, hewan pemakan akan kelaparan atau mangsa akan berkembang biak terlalu banyak.'
+            },
+
+            // --- BAB 4: AIR SUMBER KEHIDUPAN (12 Soal) ---
+            {
+                bab: 4,
+                question: "Air merupakan kebutuhan vital bagi seluruh makhluk hidup di bumi. Sumber air di bumi secara alami dapat ditemukan di...",
+                options: [
+                    { key: 'A', text: 'Sungai, danau, laut, dan air tanah' },
+                    { key: 'B', text: 'Awan hitam di luar angkasa' },
+                    { key: 'C', text: 'Gurun pasir yang sangat kering' },
+                    { key: 'D', text: 'Batuan karang yang panas' }
+                ],
+                correct: 'A',
+                explanation: 'Sumber air alami utama di bumi meliputi perairan darat (sungai, danau), air laut, serta cadangan air di dalam tanah.'
+            },
+            {
+                bab: 4,
+                question: "Proses perubahan wujud air dari cair menjadi uap air akibat panas matahari disebut...",
+                options: [
+                    { key: 'A', text: 'Penguapan (Evaporasi)' },
+                    { key: 'B', text: 'Kondensasi (Pengembunan)' },
+                    { key: 'C', text: 'Presipitasi (Hujan)' },
+                    { key: 'D', text: 'Infiltrasi (Penyerapan)' }
+                ],
+                correct: 'A',
+                explanation: 'Evaporasi adalah proses penguapan air laut, sungai, atau danau ke udara karena panas sinar matahari.'
+            },
+            {
+                bab: 4,
+                question: "Uap air yang naik ke atmosfer mengalami pendinginan dan berubah menjadi titik-titik air kecil membentuk...",
+                options: [
+                    { key: 'A', text: 'Awan' },
+                    { key: 'B', text: 'Pelangi indah' },
+                    { key: 'C', text: 'Batu kerikil' },
+                    { key: 'D', text: 'Tanah subur' }
+                ],
+                correct: 'A',
+                explanation: 'Proses kondensasi (pengembunan) uap air di udara dingin membentuk gumpalan awan di langit.'
+            },
+            {
+                bab: 4,
+                question: "Titik-titik air di awan yang sudah terlalu berat dan jatuh kembali ke permukaan bumi dinamakan...",
+                options: [
+                    { key: 'A', text: 'Hujan (Presipitasi)' },
+                    { key: 'B', text: 'Uap air panas' },
+                    { key: 'C', text: 'Angin topan' },
+                    { key: 'D', text: 'Petir menyambar' }
+                ],
+                correct: 'A',
+                explanation: 'Presipitasi adalah turunnya air dari awan ke bumi dalam bentuk hujan, salju, atau es.'
+            },
+            {
+                bab: 4,
+                question: "Sebagian air hujan yang jatuh ke tanah akan meresap ke dalam pori-pori tanah. Proses meresapnya air ini disebut...",
+                options: [
+                    { key: 'A', text: 'Infiltrasi' },
+                    { key: 'B', text: 'Evaporasi' },
+                    { key: 'C', text: 'Transpirasi' },
+                    { key: 'D', text: 'Kondensasi' }
+                ],
+                correct: 'A',
+                explanation: 'Infiltrasi adalah proses penyerapan air hujan ke dalam tanah yang nantinya menjadi cadangan air tanah bersih.'
+            },
+            {
+                bab: 4,
+                question: "Rangkaian perputaran air dari bumi ke atmosfer lalu kembali lagi ke bumi secara terus-menerus disebut...",
+                options: [
+                    { key: 'A', text: 'Siklus air (Siklus hidrologi)' },
+                    { key: 'B', text: 'Rantai makanan ekosistem' },
+                    { key: 'C', text: 'Kegiatan ekonomi pasar' },
+                    { key: 'D', text: 'Rotasi bumi harian' }
+                ],
+                correct: 'A',
+                explanation: 'Siklus air memastikan ketersediaan air di bumi tetap ada dan berputar secara teratur melalui penguapan, awan, dan hujan.'
+            },
+            {
+                bab: 4,
+                question: "Mengapa air bersih sangat penting bagi kesehatan manusia?",
+                options: [
+                    { key: 'A', text: 'Untuk minum, mandi, memasak, dan mencegah berbagai penyakit' },
+                    { key: 'B', text: 'Untuk merusak peralatan rumah tangga' },
+                    { key: 'C', text: 'Agar baju menjadi kotor dan berbau' },
+                    { key: 'D', text: 'Tidak ada manfaatnya bagi tubuh' }
+                ],
+                correct: 'A',
+                explanation: 'Air bersih layak pakai sangat esensial untuk dikonsumsi tubuh dan menjaga kebersihan diri agar terhindar dari kuman penyakit.'
+            },
+            {
+                bab: 4,
+                question: "Tindakan apa yang dapat kita lakukan untuk menghemat penggunaan air bersih di rumah?",
+                options: [
+                    { key: 'A', text: 'Mematikan keran air saat sedang tidak digunakan dan tidak membiarkannya mengalir terus' },
+                    { key: 'B', text: 'Mandi menggunakan air bak yang meluap setiap hari' },
+                    { key: 'C', text: 'Mencuci kendaraan dengan selang air menyala terus' },
+                    { key: 'D', text: 'Membiarkan keran bocor tanpa diperbaiki' }
+                ],
+                correct: 'A',
+                explanation: 'Menghemat air dilakukan dengan bijak menggunakan air secukupnya dan mematikan keran setelah selesai dipakai.'
+            },
+            {
+                bab: 4,
+                question: "Apa akibat jika sungai di sekitar pemukiman kita tercemar oleh sampah plastik dan limbah rumah tangga?",
+                options: [
+                    { key: 'A', text: 'Air menjadi berbau, sumber air tercemar, dan dapat menyebabkan banjir' },
+                    { key: 'B', text: 'Air sungai menjadi air minum yang sangat sehat' },
+                    { key: 'C', text: 'Ikan di sungai akan berkembang biak sangat cepat' },
+                    { key: 'D', text: 'Lingkungan menjadi sangat asri dan harum' }
+                ],
+                correct: 'A',
+                explanation: 'Pencemaran air merusak ekosistem sungai, membunuh ikan, serta memicu banjir saat musim hujan.'
+            },
+            {
+                bab: 4,
+                question: "Bagaimana cara menjaga kelestarian sumber air tanah agar tidak cepat kering?",
+                options: [
+                    { key: 'A', text: 'Menanam banyak pohon di pekarangan dan membuat lubang biopori' },
+                    { key: 'B', text: 'Menutup seluruh halaman rumah dengan semen rapat' },
+                    { key: 'C', text: 'Membakar sampah di dekat sumber air' },
+                    { key: 'D', text: 'Mengambil air sebanyak-banyaknya tanpa batas' }
+                ],
+                correct: 'A',
+                explanation: 'Pohon membantu akar menyerap dan menyimpan air hujan di dalam tanah, menjaga ketersediaan air sumur tetap terjaga.'
+            },
+            {
+                bab: 4,
+                question: "Ciri-ciri air bersih yang layak untuk dikonsumsi adalah...",
+                options: [
+                    { key: 'A', text: 'Jernih, tidak berbau, tidak berasa, dan bebas kuman penyakit' },
+                    { key: 'B', text: 'Keruh kecoklatan dan berbau menyengat' },
+                    { key: 'C', text: 'Berasa manis dan berwarna merah terang' },
+                    { key: 'D', text: 'Berbusa banyak dan terasa asin' }
+                ],
+                correct: 'A',
+                explanation: 'Air bersih standar kesehatan harus jernih, tidak berasa, tidak berbau, serta bebas dari zat kimia berbahaya dan bakteri.'
+            },
+            {
+                bab: 4,
+                question: "Mengapa siklus air sangat penting bagi kehidupan di planet bumi?",
+                options: [
+                    { key: 'A', text: 'Karena mendistribusikan air bersih ke berbagai daratan secara merata' },
+                    { key: 'B', text: 'Karena membuat bumi menjadi kering kerontang' },
+                    { key: 'C', text: 'Karena menghentikan turunnya hujan selamanya' },
+                    { key: 'D', text: 'Karena menghilangkan seluruh air di lautan' }
+                ],
+                correct: 'A',
+                explanation: 'Siklus air mendaur ulang air di bumi sehingga tumbuhan, hewan, dan manusia tidak pernah kehabisan pasokan air.'
+            }
+        ];
+
+        // Ensure 50 questions total
+        console.log(`Total questions loaded: ${questionsData.length}`);
+
+        // Navigation Functions
+        function renderApp() {
+            const app = document.getElementById('app');
+            app.innerHTML = '';
+
+            if (gameState.step === 'welcome') {
+                app.innerHTML = renderWelcomeScreen();
+            } else if (gameState.step === 'instructions') {
+                app.innerHTML = renderInstructionsScreen();
+            } else if (gameState.step === 'material') {
+                app.innerHTML = renderMaterialScreen();
+            } else if (gameState.step === 'quiz') {
+                app.innerHTML = renderQuizScreen();
+            } else if (gameState.step === 'feedback') {
+                app.innerHTML = renderFeedbackScreen();
+            } else if (gameState.step === 'result') {
+                app.innerHTML = renderResultScreen();
+            } else if (gameState.step === 'certificate') {
+                app.innerHTML = renderCertificateScreen();
+            }
+        }
+
+        // 1. Welcome Screen
+        function renderWelcomeScreen() {
+            return `
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 text-center border-4 border-emerald-400 relative overflow-hidden">
+                    <div class="absolute -top-10 -right-10 w-32 h-32 bg-emerald-100 rounded-full blur-xl pointer-events-none"></div>
+                    <div class="absolute -bottom-10 -left-10 w-32 h-32 bg-blue-100 rounded-full blur-xl pointer-events-none"></div>
+                    
+                    <div class="inline-block bg-emerald-100 text-emerald-800 font-bold px-4 py-1.5 rounded-full text-sm mb-4">
+                        ✨ Game Edukasi Interaktif Kelas 5 SD/MI ✨
+                    </div>
+
+                    <h1 class="text-3xl sm:text-5xl font-extrabold text-emerald-600 mb-2 tracking-tight">
+                        PETUALANGAN IPAS
+                    </h1>
+                    <h2 class="text-xl sm:text-2xl font-bold text-slate-700 mb-6">
+                        IPAS Kelas 5 SD/MI
+                    </h2>
+
+                    <!-- Illustrations Grid -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 max-w-lg mx-auto text-xs font-semibold text-slate-600">
+                        <div class="bg-emerald-50 p-3 rounded-2xl border border-emerald-200 flex flex-col items-center justify-center floating">
+                            <span class="text-2xl mb-1">🗺️</span> Peta & Indonesia
+                        </div>
+                        <div class="bg-blue-50 p-3 rounded-2xl border border-blue-200 flex flex-col items-center justify-center floating" style="animation-delay: 0.5s;">
+                            <span class="text-2xl mb-1">💰</span> Ekonomi & Pasar
+                        </div>
+                        <div class="bg-amber-50 p-3 rounded-2xl border border-amber-200 flex flex-col items-center justify-center floating" style="animation-delay: 1s;">
+                            <span class="text-2xl mb-1">🌳</span> Ekosistem Alam
+                        </div>
+                        <div class="bg-cyan-50 p-3 rounded-2xl border border-cyan-200 flex flex-col items-center justify-center floating" style="animation-delay: 1.5s;">
+                            <span class="text-2xl mb-1">💧</span> Air & Siklus
+                        </div>
+                    </div>
+
+                    <!-- Input Name Section -->
+                    <div class="max-w-md mx-auto bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6">
+                        <label for="studentNameInput" class="block text-sm font-bold text-slate-700 mb-2">
+                            Masukkan Nama Kamu:
+                        </label>
+                        <input type="text" id="studentNameInput" placeholder="Contoh: Budi Santoso" 
+                            class="w-full px-4 py-3 rounded-xl border-2 border-emerald-300 focus:border-emerald-500 focus:outline-none text-center font-bold text-lg text-slate-800 bg-white"
+                            value="${gameState.studentName}">
+                    </div>
+
+                    <button onclick="handleStartAdventure()" class="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg transition transform hover:-translate-y-0.5 text-lg pulse-btn">
+                        🚀 MULAI BELAJAR
+                    </button>
+                </div>
+            `;
+        }
+
+        function handleStartAdventure() {
+            const input = document.getElementById('studentNameInput').value.trim();
+            if (!input) {
+                alert("Mohon masukkan nama kamu terlebih dahulu ya!");
+                return;
+            }
+            gameState.studentName = input;
+            gameState.step = 'instructions';
+            speakText(`Halo, ${gameState.studentName}! Selamat datang di Petualangan IPAS Kelas 5.`);
+            renderApp();
+        }
+
+        // 2. Instructions Screen
+        function renderInstructionsScreen() {
+            return `
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 border-4 border-blue-400">
+                    <div class="text-center mb-6">
+                        <span class="text-3xl">📜</span>
+                        <h2 class="text-2xl sm:text-3xl font-extrabold text-blue-600 mt-2">PETUNJUK PERMAINAN</h2>
+                        <p class="text-slate-600 text-sm mt-1">Halo, <b>${gameState.studentName}</b>! Perhatikan cara bermain berikut ini:</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 text-sm text-slate-700">
+                        <div class="bg-blue-50 p-4 rounded-2xl border border-blue-200 flex items-start gap-3">
+                            <span class="text-xl">📚</span>
+                            <div><b>1. Pelajari Materi:</b> Baca rangkuman materi IPAS Bab 1 sampai Bab 4 sebelum atau saat kuis.</div>
+                        </div>
+                        <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 flex items-start gap-3">
+                            <span class="text-xl">💡</span>
+                            <div><b>2. Penjelasan & Contoh:</b> Pahami contoh kehidupan sehari-hari dan fakta penting di setiap bab.</div>
+                        </div>
+                        <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200 flex items-start gap-3">
+                            <span class="text-xl">❓</span>
+                            <div><b>3. 50 Soal Tantangan:</b> Kerjakan total 50 soal pilihan ganda yang disebar merata dari semua bab.</div>
+                        </div>
+                        <div class="bg-purple-50 p-4 rounded-2xl border border-purple-200 flex items-start gap-3">
+                            <span class="text-xl">⭐</span>
+                            <div><b>4. Poin & Pembahasan:</b> Setiap jawaban benar bernilai 20 poin (Maks 1000). Dapatkan pembahasan lengkap.</div>
+                        </div>
+                        <div class="bg-rose-50 p-4 rounded-2xl border border-rose-200 flex items-start gap-3">
+                            <span class="text-xl">📖</span>
+                            <div><b>5. Akses Materi Kapan Saja:</b> Bisa kembali membaca materi saat mengerjakan kuis tanpa kehilangan progress jawaban atau skor!</div>
+                        </div>
+                        <div class="bg-cyan-50 p-4 rounded-2xl border border-cyan-200 flex items-start gap-3">
+                            <span class="text-xl">🏆</span>
+                            <div><b>6. Sertifikat Digital:</b> Selesaikan semua soal sampai akhir untuk mendapatkan sertifikat penghargaan namamu.</div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                        <button onclick="goToMaterial()" class="px-6 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl shadow transition text-base">
+                            🌏 BACA MATERI DULU
+                        </button>
+                        <button onclick="startQuizDirectly()" class="px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow transition text-base pulse-btn">
+                            🎯 MULAI KUIS SEKARANG
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function goToMaterial() {
+            gameState.step = 'material';
+            renderApp();
+        }
+
+        function startQuizDirectly() {
+            gameState.step = 'quiz';
+            gameState.currentQuestionIndex = 0;
+            renderApp();
+        }
+
+        // 3. Material Learning Screen (Bab 1 - 4)
+        function renderMaterialScreen() {
+            return `
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-8 border-4 border-emerald-400 flex flex-col max-h-[85vh]">
+                    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 pb-4 border-b border-slate-200 gap-4">
+                        <div>
+                            <h2 class="text-2xl font-extrabold text-emerald-600">🌏 MATERI PEMBELAJARAN IPAS KELAS 5</h2>
+                            <p class="text-slate-600 text-sm">Pilih Bab materi yang ingin kamu pelajari di bawah ini:</p>
+                        </div>
+                        <button onclick="backFromMaterial()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl shadow text-sm transition">
+                            ${gameState.currentQuestionIndex > 0 || gameState.score > 0 ? '↩ KEMBALI KE KUIS' : '🎯 LANJUT KE KUIS'}
+                        </button>
+                    </div>
+
+                    <!-- Bab Tabs -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
+                        <button onclick="setActiveBab('bab1')" class="py-3 px-3 rounded-xl font-bold text-xs sm:text-sm transition ${gameState.activeTabBab === 'bab1' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                            🌏 Bab 1: Indonesia
+                        </button>
+                        <button onclick="setActiveBab('bab2')" class="py-3 px-3 rounded-xl font-bold text-xs sm:text-sm transition ${gameState.activeTabBab === 'bab2' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                            💰 Bab 2: Majulah Daerahku
+                        </button>
+                        <button onclick="setActiveBab('bab3')" class="py-3 px-3 rounded-xl font-bold text-xs sm:text-sm transition ${gameState.activeTabBab === 'bab3' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                            🌳 Bab 3: Ekosistem
+                        </button>
+                        <button onclick="setActiveBab('bab4')" class="py-3 px-3 rounded-xl font-bold text-xs sm:text-sm transition ${gameState.activeTabBab === 'bab4' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                            💧 Bab 4: Air Sumber Hidup
+                        </button>
+                    </div>
+
+                    <!-- Material Content Box -->
+                    <div class="overflow-y-auto pr-2 flex-grow space-y-6 text-slate-700 text-sm sm:text-base leading-relaxed">
+                        ${getBabContentHTML(gameState.activeTabBab)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function setActiveBab(babKey) {
+            gameState.activeTabBab = babKey;
+            renderApp();
+        }
+
+        function backFromMaterial() {
+            if (Object.keys(gameState.quizAnswers).length > 0 || gameState.currentQuestionIndex > 0) {
+                gameState.step = 'quiz';
+            } else {
+                gameState.step = 'quiz';
+                gameState.currentQuestionIndex = 0;
+            }
+            renderApp();
+        }
+
+        function getBabContentHTML(bab) {
+            if (bab === 'bab1') {
+                return `
+                    <div class="space-y-4">
+                        <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200">
+                            <h3 class="font-extrabold text-emerald-800 text-lg mb-2">BAB 1 – DI MANA INDONESIA BERADA?</h3>
+                            <p class="text-slate-600">Mempelajari letak geografis, daratan, lautan, serta karakteristik Indonesia sebagai negara maritim dan agraris.</p>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-slate-800 text-base">A. Daratan dan Lautan di Indonesia</h4>
+                            <p>Indonesia adalah negara kepulauan terbesar di dunia. Wilayah perairan atau lautan Indonesia jauh lebih luas dibandingkan daratannya. Kenampakan alam daratan meliputi pulau-pulau besar (Sumatra, Jawa, Kalimantan, Sulawesi, Papua), gunung berapi, dataran rendah, dan lembah. Kenampakan perairan meliputi laut, selat, teluk, dan sungai.</p>
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs sm:text-sm">
+                                <b>Contoh Sehari-hari:</b> Masyarakat di pesisir pantai bekerja sebagai nelayan karena dekat dengan laut, sementara di dataran rendah banyak yang bertani sawah.
+                            </div>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-slate-800 text-base">B. Indonesia, Zamrud di Khatulistiwa</h4>
+                            <p>Indonesia terletak di sekitar garis khatulistiwa (0 derajat). Kota Pontianak adalah salah satu wilayah yang dilalui garis ini. Posisi ini memberikan iklim tropis dengan dua musim (hujan dan kemarau) serta kekayaan alam hutan hujan yang hijau subur bagaikan permata zamrud.</p>
+                            <div class="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs sm:text-sm">
+                                <b>Fakta Penting:</b> Iklim tropis dan tanah vulkanik yang subur menjadikan keanekaragaman flora dan fauna di Indonesia sangat melimpah.
+                            </div>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-slate-800 text-base">C. Kehidupan sebagai Negara Maritim dan Agraris</h4>
+                            <p><b>Negara Maritim:</b> Negara yang memiliki wilayah laut yang sangat luas dan kaya akan sumber daya kelautan. <b>Negara Agraris:</b> Negara yang penduduknya banyak bermata pencaharian sebagai petani karena didukung tanah yang subur.</p>
+                            <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-200 text-xs sm:text-sm">
+                                <b>Rangkuman:</b> Letak geografis Indonesia sangat strategis dan memengaruhi corak pekerjaan masyarakatnya menjadi nelayan, petani, peternak, dan pelaut.
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (bab === 'bab2') {
+                return `
+                    <div class="space-y-4">
+                        <div class="bg-blue-50 p-4 rounded-2xl border border-blue-200">
+                            <h3 class="font-extrabold text-blue-800 text-lg mb-2">BAB 2 – MAJULAH DAERAHKU!</h3>
+                            <p class="text-slate-600">Mempelajari kebutuhan manusia, kegiatan ekonomi (produksi, distribusi, konsumsi), serta cara menjadi pelaku ekonomi yang bijak.</p>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-slate-800 text-base">A. Bagaimana Aku Memenuhi Kebutuhanku?</h4>
+                            <p>Kebutuhan adalah segala sesuatu yang diperlukan manusia untuk kelangsungan hidup. Kebutuhan pokok (primer) meliputi makanan, pakaian, dan rumah. Alat pemenuh kebutuhan dibedakan menjadi <b>barang</b> (berwujud fisik seperti buku dan baju) dan <b>jasa</b> (pelayanan tenaga seperti guru dan dokter).</p>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-slate-800 text-base">B. Kegiatan Ekonomi di Daerahku</h4>
+                            <p>Kegiatan ekonomi terbagi tiga:</p>
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li><b>Produksi:</b> Kegiatan menghasilkan barang/jasa (contoh: petani menanam padi, nelayan mencari ikan).</li>
+                                <li><b>Distribusi:</b> Kegiatan menyalurkan barang dari produsen ke konsumen (contoh: sopir truk mengantar sayur ke pasar).</li>
+                                <li><b>Konsumsi:</b> Kegiatan menghabiskan nilai guna barang/jasa (contoh: makan nasi atau memakai sepatu).</li>
+                            </ul>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-slate-800 text-base">C. Aku Pelaku Ekonomi yang Bijak</h4>
+                            <p>Pelaku ekonomi yang bijak mampu membedakan antara <b>kebutuhan</b> (hal wajib untuk hidup) dan <b>keinginan</b> (tambahan kesenangan yang bisa ditunda). Kita harus menggunakan uang dengan bijak, gemar menabung, tidak boros, serta menjaga lingkungan dalam setiap kegiatan ekonomi.</p>
+                        </div>
+                    </div>
+                `;
+            } else if (bab === 'bab3') {
+                return `
+                    <div class="space-y-4">
+                        <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200">
+                            <h3 class="font-extrabold text-amber-800 text-lg mb-2">BAB 3 – HARMONI DALAM EKOSISTEM</h3>
+                            <p class="text-slate-600">Mengenal ekosistem, komponen biotik & abiotik, rantai makanan, jaring-jaring makanan, serta peran manusia.</p>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-slate-800 text-base">A. Berkenalan dengan Ekosistem</h4>
+                            <p>Ekosistem adalah hubungan timbal balik antara makhluk hidup dengan lingkungan sekitarnya. Terdiri dari dua komponen:</p>
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li><b>Biotik:</b> Komponen makhluk hidup (manusia, hewan, tumbuhan, bakteri).</li>
+                                <li><b>Abiotik:</b> Komponen benda tak hidup (air, tanah, udara, cahaya matahari, suhu).</li>
+                            </ul>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-slate-800 text-base">B. Interaksi Antarkomponen dalam Ekosistem</h4>
+                            <p>Makhluk hidup saling berinteraksi melalui peristiwa makan dan dimakan:</p>
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li><b>Produsen:</b> Tumbuhan hijau yang membuat makanan sendiri (fotosintesis).</li>
+                                <li><b>Konsumen:</b> Hewan pemakan tumbuhan atau hewan lain.</li>
+                                <li><b>Pengurai (Dekomposer):</b> Jamur dan bakteri yang menguraikan sisa makhluk mati menjadi zat hara.</li>
+                                <li><b>Rantai & Jaring-jaring Makanan:</b> Urutan makan dan dimakan yang saling terhubung.</li>
+                            </ul>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-slate-800 text-base">C. Peran Manusia dalam Ekosistem</h4>
+                            <p>Manusia berperan penting menjaga keseimbangan alam. Tindakan positif meliputi reboisasi (menanam pohon), menjaga kebersihan lingkungan, dan melindungi hewan langka. Tindakan negatif yang merusak adalah penebangan liar dan pembuangan sampah sembarangan.</p>
+                        </div>
+                    </div>
+                `;
+            } else if (bab === 'bab4') {
+                return `
+                    <div class="space-y-4">
+                        <div class="bg-cyan-50 p-4 rounded-2xl border border-cyan-200">
+                            <h3 class="font-extrabold text-cyan-800 text-lg mb-2">BAB 4 – AIR SUMBER KEHIDUPAN</h3>
+                            <p class="text-slate-600">Mempelajari aliran air, siklus air, serta pentingnya menjaga ketersediaan air bersih di lingkungan.</p>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-slate-800 text-base">A. Ke Mana Air Mengalir?</h4>
+                            <p>Air mengalir dari tempat tinggi ke tempat rendah melalui sungai, danau, hingga bermuara di laut. Air sangat penting bagi seluruh makhluk hidup untuk minum, memasak, dan membersihkan diri.</p>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-slate-800 text-base">B. Beginilah Terjadinya Siklus Air</h4>
+                            <p>Siklus air (hidrologi) terjadi secara berputar:</p>
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li><b>Evaporasi:</b> Penguapan air oleh panas matahari.</li>
+                                <li><b>Kondensasi:</b> Pendinginan uap air membentuk awan.</li>
+                                <li><b>Presipitasi:</b> Turunya titik air menjadi hujan.</li>
+                                <li><b>Infiltrasi:</b> Air meresap ke dalam tanah menjadi cadangan air bersih.</li>
+                            </ul>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-slate-800 text-base">C. Ke Mana Air Bersih di Lingkunganku?</h4>
+                            <p>Air bersih bersumber dari sumur dan mata air terlindungi. Kita wajib menjaga kelestarian air dengan cara menghemat penggunaan air, tidak membuang sampah ke sungai, serta menanam pohon di sekitar lingkungan.</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // 4. Quiz Screen
+        function renderQuizScreen() {
+            const qIndex = gameState.currentQuestionIndex;
+            const currentQ = questionsData[qIndex];
+            const totalQ = questionsData.length;
+            const savedAns = gameState.quizAnswers[qIndex];
+
+            return `
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-8 border-4 border-indigo-400">
+                    <!-- Top Bar: Progress, Name, Score -->
+                    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 pb-4 border-b border-slate-200 gap-3">
+                        <div>
+                            <span class="bg-indigo-100 text-indigo-800 font-bold px-3 py-1 rounded-full text-xs">
+                                SOAL ${qIndex + 1} DARI ${totalQ} (Bab ${currentQ.bab})
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-4 text-sm font-bold text-slate-700">
+                            <span>👤 Nama: ${gameState.studentName}</span>
+                            <span class="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full">⭐ Skor: ${gameState.score}</span>
+                        </div>
+                    </div>
+
+                    <!-- Question Text -->
+                    <div class="mb-6">
+                        <h3 class="text-lg sm:text-xl font-bold text-slate-800 leading-snug">
+                            ${currentQ.question}
+                        </h3>
+                    </div>
+
+                    <!-- Options Grid -->
+                    <div class="space-y-3 mb-6">
+                        ${currentQ.options.map(opt => {
+                            let btnStyle = "bg-slate-50 hover:bg-indigo-50 border-slate-200 text-slate-700";
+                            if (savedAns && savedAns.selected === opt.key) {
+                                btnStyle = "bg-indigo-600 text-white border-indigo-600 shadow-md";
+                            }
+                            return `
+                                <button onclick="selectAnswer('${opt.key}')" 
+                                    class="w-full text-left p-4 rounded-2xl border-2 font-medium transition flex items-center gap-4 ${btnStyle}">
+                                    <span class="w-8 h-8 rounded-xl bg-white text-indigo-600 font-bold flex items-center justify-center shadow-sm flex-shrink-0">
+                                        ${opt.key}
+                                    </span>
+                                    <span class="text-sm sm:text-base">${opt.text}</span>
+                                </button>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-slate-200">
+                        <button onclick="goToMaterialFromQuiz()" class="w-full sm:w-auto px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow text-sm transition flex items-center justify-center gap-2">
+                            📚 KEMBALI KE MATERI
+                        </button>
+
+                        <button onclick="submitAnswer()" ${!savedAns ? 'disabled opacity-50 cursor-not-allowed' : ''} 
+                            class="w-full sm:w-auto px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow text-base transition">
+                            ${qIndex === totalQ - 1 ? '🏁 SELESAI & LIHAT HASIL' : '➡ JAWAB & LANJUT'}
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function selectAnswer(key) {
+            const qIndex = gameState.currentQuestionIndex;
+            gameState.quizAnswers[qIndex] = { selected: key };
+            renderApp();
+        }
+
+        function goToMaterialFromQuiz() {
+            gameState.step = 'material';
+            renderApp();
+        }
+
+        function submitAnswer() {
+            const qIndex = gameState.currentQuestionIndex;
+            const currentQ = questionsData[qIndex];
+            const ans = gameState.quizAnswers[qIndex];
+
+            if (!ans) return;
+
+            const isCorrect = (ans.selected === currentQ.correct);
+            gameState.quizAnswers[qIndex].isCorrect = isCorrect;
+
+            if (isCorrect) {
+                gameState.score += 20;
+                gameState.correctCount++;
+                speakText(`Benar, ${gameState.studentName}! Hebat sekali!`);
+            } else {
+                gameState.incorrectCount++;
+                speakText(`Belum tepat, ${gameState.studentName}. Yuk, pelajari kembali materinya.`);
+            }
+
+            gameState.step = 'feedback';
+            renderApp();
+        }
+
+        // 5. Feedback Screen (Benar / Salah + Pembahasan)
+        function renderFeedbackScreen() {
+            const qIndex = gameState.currentQuestionIndex;
+            const currentQ = questionsData[qIndex];
+            const ans = gameState.quizAnswers[qIndex];
+            const isCorrect = ans.isCorrect;
+
+            return `
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 border-4 ${isCorrect ? 'border-emerald-400' : 'border-rose-400'} max-w-2xl mx-auto text-center">
+                    <div class="mb-4">
+                        <span class="text-5xl">${isCorrect ? '✅' : '❌'}</span>
+                    </div>
+
+                    <h2 class="text-2xl sm:text-3xl font-extrabold mb-1 ${isCorrect ? 'text-emerald-600' : 'text-rose-600'}">
+                        ${isCorrect ? '✓ BENAR!' : '✗ BELUM TEPAT'}
+                    </h2>
+                    <p class="text-slate-600 text-sm mb-6 font-medium">
+                        ${isCorrect ? `Hebat, ${gameState.studentName}!` : `${gameState.studentName}, jangan menyerah!`}
+                    </p>
+
+                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-left mb-6 space-y-3">
+                        ${!isCorrect ? `
+                            <div class="text-sm font-bold text-rose-600">
+                                Jawaban yang benar adalah: Pilihan ${currentQ.correct}
+                            </div>
+                        ` : ''}
+                        <div>
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Pembahasan:</span>
+                            <p class="text-slate-700 text-sm sm:text-base leading-relaxed">${currentQ.explanation}</p>
+                        </div>
+                    </div>
+
+                    <button onclick="nextQuestion()" class="w-full sm:w-auto px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg transition text-base pulse-btn">
+                        ➡ LANJUT KE SOAL BERIKUTNYA
+                    </button>
+                </div>
+            `;
+        }
+
+        function nextQuestion() {
+            gameState.currentQuestionIndex++;
+            if (gameState.currentQuestionIndex >= questionsData.length) {
+                gameState.step = 'result';
+                speakText(`Selamat, ${gameState.studentName}! Kamu telah menyelesaikan 50 soal IPAS.`);
+            } else {
+                gameState.step = 'quiz';
+                speakText(`Bagus, ${gameState.studentName}. Sekarang kita lanjut ke soal berikutnya.`);
+            }
+            renderApp();
+        }
+
+        // 6. Result Screen
+        function renderResultScreen() {
+            return `
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 border-4 border-emerald-400 max-w-2xl mx-auto text-center">
+                    <div class="text-5xl mb-3">🎉</div>
+                    <h2 class="text-3xl font-extrabold text-emerald-600 mb-1">KUIS SELESAI!</h2>
+                    <p class="text-slate-600 text-sm mb-6">Selamat, <b>${gameState.studentName}</b>!</p>
+
+                    <!-- Score Card -->
+                    <div class="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-6 mb-6">
+                        <div class="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">Total Skor Kamu</div>
+                        <div class="text-4xl sm:text-5xl font-extrabold text-emerald-700 mb-2">${gameState.score} <span class="text-xl text-slate-400">/ 1000</span></div>
+                        <div class="flex justify-center gap-6 text-sm font-semibold text-slate-600 mt-4 pt-4 border-t border-emerald-200/60">
+                            <span class="text-emerald-600">✅ Benar: ${gameState.correctCount}</span>
+                            <span class="text-rose-600">❌ Salah: ${gameState.incorrectCount}</span>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row justify-center gap-4">
+                        <button onclick="viewCertificate()" class="px-6 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl shadow transition text-base flex items-center justify-center gap-2">
+                            🏆 LIHAT SERTIFIKAT
+                        </button>
+                        <button onclick="restartQuiz()" class="px-6 py-3.5 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-2xl shadow transition text-base flex items-center justify-center gap-2">
+                            🔄 ULANGI KUIS
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function viewCertificate() {
+            gameState.step = 'certificate';
+            renderApp();
+        }
+
+        function restartQuiz() {
+            gameState.currentQuestionIndex = 0;
+            gameState.score = 0;
+            gameState.correctCount = 0;
+            gameState.incorrectCount = 0;
+            gameState.selectedAnswer = null;
+            gameState.quizAnswers = {};
+            gameState.step = 'quiz';
+            renderApp();
+        }
+
+        // 7. Certificate Screen
+        function renderCertificateScreen() {
+            const currentDate = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+            return `
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 border-8 border-amber-300 max-w-2xl mx-auto text-center relative overflow-hidden">
+                    <div class="absolute top-2 left-2 text-amber-300 text-2xl">★</div>
+                    <div class="absolute top-2 right-2 text-amber-300 text-2xl">★</div>
+                    <div class="absolute bottom-2 left-2 text-amber-300 text-2xl">★</div>
+                    <div class="absolute bottom-2 right-2 text-amber-300 text-2xl">★</div>
+
+                    <div class="text-xs font-bold uppercase tracking-widest text-amber-600 mb-1">SERTIFIKAT PENGHARGAAN</div>
+                    <h2 class="text-2xl sm:text-4xl font-extrabold text-slate-800 mb-2">PETUALANGAN IPAS KELAS 5</h2>
+                    <p class="text-xs text-slate-500 mb-6">Diberikan dengan bangga kepada:</p>
+
+                    <div class="text-2xl sm:text-3xl font-bold text-emerald-600 border-b-2 border-emerald-300 pb-2 mb-4 inline-block px-6">
+                        ${gameState.studentName}
+                    </div>
+
+                    <p class="text-slate-600 text-sm max-w-md mx-auto mb-6 leading-relaxed">
+                        Atas keberhasilannya menyelesaikan 50 soal uji kompetensi IPAS Kelas 5 SD/MI dengan sangat baik.
+                    </p>
+
+                    <!-- Stats on Cert -->
+                    <div class="flex justify-center gap-6 bg-amber-50/60 p-4 rounded-2xl border border-amber-200 mb-6 max-w-sm mx-auto text-sm font-bold text-slate-700">
+                        <div>Skor: <span class="text-emerald-600">${gameState.score} / 1000</span></div>
+                        <div>Benar: <span class="text-emerald-600">${gameState.correctCount} / 50</span></div>
+                    </div>
+
+                    <div class="text-xs text-slate-500 mb-8">
+                        Tanggal: <b>${currentDate}</b>
+                    </div>
+
+                    <!-- Developer signature badge -->
+                    <div class="border-t border-slate-200 pt-4 flex justify-between items-center text-xs text-slate-500">
+                        <div>Pengembang: <b>Giga Inovation</b></div>
+                        <div>Kontak: <b>081329200985</b></div>
+                    </div>
+
+                    <div class="mt-6 flex flex-col sm:flex-row justify-center gap-4">
+                        <button onclick="window.print()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow text-sm transition">
+                            🖨️ CETAK / SIMPAN SERTIFIKAT
+                        </button>
+                        <button onclick="restartQuiz()" class="px-6 py-3 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl shadow text-sm transition">
+                            🔄 ULANGI KUIS
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Initialize on load
+        window.onload = function () {
+            renderApp();
+        };
+    </script>
+</body>
+</html>
