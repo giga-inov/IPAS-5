@@ -55,6 +55,12 @@
             <span class="font-extrabold text-emerald-700 text-sm sm:text-base">Petualangan IPAS 5</span>
         </div>
         <div class="flex items-center gap-3">
+            <button onclick="switchTab('quiz')" id="navQuizBtn" class="px-3.5 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                <span>🎯</span> Kuis 50 Soal
+            </button>
+            <button onclick="switchTab('game')" id="navGameBtn" class="px-3.5 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                <span>🕹️</span> Mini Game IPAS
+            </button>
             <button onclick="promptTeacherPIN()" class="px-3.5 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
                 <span>👩‍🏫</span> Mode Guru (PIN)
             </button>
@@ -129,8 +135,6 @@
 
         async function initFirebase() {
             try {
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'petualangan-ipas-5-default';
-                
                 const firebaseConfig = {
                     apiKey: "AIzaSyBP7pWExRDP8EKXmD8vLqaRfdmPYHcZndg",
                     authDomain: "eduipas5.firebaseapp.com",
@@ -145,7 +149,6 @@
                 window.auth = getAuth(app);
                 window.db = getFirestore(app);
 
-                // Auth process per rule 3
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(window.auth, __initial_auth_token);
                 } else {
@@ -154,8 +157,7 @@
                 window.isFirebaseReady = true;
                 console.log("Firebase initialized successfully for user:", window.auth.currentUser?.uid);
                 
-                // Start listening to student progress for Teacher Monitor
-                setupTeacherMonitor(appId);
+                setupTeacherMonitor();
             } catch (e) {
                 console.warn("Firebase initialization skipped or failed in offline preview mode:", e);
             }
@@ -165,11 +167,10 @@
             if (!window.isFirebaseReady || !window.db || !window.auth) return;
             const userId = window.auth.currentUser?.uid;
             if (!userId) return;
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'petualangan-ipas-5-default';
             
             try {
-                // Rule 1: artifacts/{appId}/student_records/{userId} has 4 segments (Even)
-                const docRef = doc(window.db, 'artifacts', appId, 'student_records', userId);
+                // FIXED: Use valid 1-segment top-level collection reference ("student_records")
+                const docRef = doc(window.db, 'student_records', userId);
                 await setDoc(docRef, {
                     userId: userId,
                     name: studentData.studentName,
@@ -182,18 +183,17 @@
                     lastUpdated: new Date().toISOString()
                 }, { merge: true });
             } catch (err) {
-                // Gracefully catch permission or network errors without breaking gameplay
                 console.warn("Cloud sync skipped due to permissions/network:", err?.message || err);
             }
         };
 
-        function setupTeacherMonitor(appId) {
+        function setupTeacherMonitor() {
             if (!window.db) return;
             try {
-                // artifacts/{appId}/public_data/students_live_list has 4 segments collection path
-                const publicColRef = collection(window.db, 'artifacts', appId, 'public_data', 'students_live_list');
+                // FIXED: Use valid 1-segment top-level collection reference ("students_live_monitor")
+                const colRef = collection(window.db, 'students_live_monitor');
                 
-                onSnapshot(publicColRef, (snapshot) => {
+                onSnapshot(colRef, (snapshot) => {
                     const listEl = document.getElementById('teacherStudentList');
                     if (!listEl) return;
                     if (snapshot.empty) {
@@ -238,10 +238,9 @@
             if (!window.isFirebaseReady || !window.db || !window.auth) return;
             const userId = window.auth.currentUser?.uid;
             if (!userId) return;
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'petualangan-ipas-5-default';
             try {
-                // artifacts/{appId}/public_data/students_live_list/{userId} has 4 segments (Even)
-                const docRef = doc(window.db, 'artifacts', appId, 'public_data', 'students_live_list', userId);
+                // FIXED: Use valid document reference under top-level collection "students_live_monitor"
+                const docRef = doc(window.db, 'students_live_monitor', userId);
                 await setDoc(docRef, {
                     userId: userId,
                     name: studentData.studentName,
@@ -254,7 +253,6 @@
                     lastUpdated: new Date().toISOString()
                 }, { merge: true });
             } catch (err) {
-                // Gracefully catch permission or network errors
                 console.warn("Public cloud sync skipped due to permissions/network:", err?.message || err);
             }
         };
@@ -268,20 +266,65 @@
     <script>
         // State Management
         let gameState = {
+            mainTab: 'quiz', // 'quiz' or 'game'
             step: 'welcome', // welcome, instructions, material, quiz, feedback, gameover, result, certificate
             studentName: '',
             currentQuestionIndex: 0,
             score: 0,
             correctCount: 0,
             incorrectCount: 0,
-            lives: 3, // 3 lives system
+            lives: 3,
             selectedAnswer: null,
-            quizAnswers: {}, // index -> {selected, isCorrect}
+            quizAnswers: {},
             activeTabBab: 'bab1',
-            randomizedQuestions: [] // Shuffled options for each question
+            randomizedQuestions: []
         };
 
-        // Custom Modal helper (replaces alert)
+        function switchTab(tab) {
+            gameState.mainTab = tab;
+            const qBtn = document.getElementById('navQuizBtn');
+            const gBtn = document.getElementById('navGameBtn');
+            if (tab === 'game') {
+                if (!gameState.studentName) {
+                    showCustomModal("Masukkan Nama Dulu", "Silakan masukkan nama kamu di layar utama kuis sebelum bermain mini-game!", "⚠️");
+                    gameState.mainTab = 'quiz';
+                    renderApp();
+                    return;
+                }
+                if (qBtn && gBtn) {
+                    gBtn.className = "px-3.5 py-1.5 bg-amber-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm";
+                    qBtn.className = "px-3.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5";
+                }
+                renderMiniGameScreen();
+            } else {
+                if (qBtn && gBtn) {
+                    qBtn.className = "px-3.5 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm";
+                    gBtn.className = "px-3.5 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5";
+                }
+                renderApp();
+            }
+        }
+
+        function promptTeacherPIN() {
+            document.getElementById('teacherPinModal').classList.remove('hidden');
+            document.getElementById('teacherPinInput').value = '';
+            document.getElementById('teacherPinInput').focus();
+        }
+
+        function closeTeacherPinModal() {
+            document.getElementById('teacherPinModal').classList.add('hidden');
+        }
+
+        function verifyTeacherPin() {
+            const pin = document.getElementById('teacherPinInput').value;
+            if (pin === '123456') {
+                closeTeacherPinModal();
+                toggleTeacherModeModal();
+            } else {
+                showCustomModal("PIN Salah", "PIN guru yang Anda masukkan salah. Gunakan PIN standar: 123456", "❌");
+            }
+        }
+
         function showCustomModal(title, message, icon = 'ℹ️') {
             document.getElementById('modalTitle').innerText = title;
             document.getElementById('modalMessage').innerText = message;
@@ -293,32 +336,11 @@
             document.getElementById('customModal').classList.add('hidden');
         }
 
-        // PIN Verification for Teacher Mode
-        function promptTeacherPIN() {
-            document.getElementById('teacherPinInput').value = '';
-            document.getElementById('teacherPinModal').classList.remove('hidden');
-        }
-
-        function closeTeacherPinModal() {
-            document.getElementById('teacherPinModal').classList.add('hidden');
-        }
-
-        function verifyTeacherPin() {
-            const pinVal = document.getElementById('teacherPinInput').value.trim();
-            if (pinVal === '123456') {
-                closeTeacherPinModal();
-                toggleTeacherModeModal();
-            } else {
-                showCustomModal("PIN Salah", "PIN yang Anda masukkan tidak valid. Silakan gunakan PIN standar: 123456", "⚠️");
-            }
-        }
-
         function toggleTeacherModeModal() {
             const modal = document.getElementById('teacherModal');
             modal.classList.toggle('hidden');
         }
 
-        // Speech Synthesis Helper in Indonesian
         function speakText(text) {
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
@@ -330,7 +352,6 @@
             }
         }
 
-        // 50 Rich IPAS Grade 5 Questions
         const rawQuestionsData = [
             // --- BAB 1: DI MANA INDONESIA BERADA? (12 Soal) ---
             {
@@ -882,16 +903,15 @@
                 bab: 4,
                 question: "Mengapa siklus air sangat penting bagi kehidupan di planet bumi?",
                 options: [
-                    { text: 'Karena mendistribusikan air bersih ke berbagai daratan secara merata', isCorrect: true },
-                    { text: 'Because membuat bumi menjadi kering kerontang', isCorrect: false },
-                    { text: 'Karena menghentikan turunnya hujan selamanya', isCorrect: false },
-                    { text: 'Karena menghilangkan seluruh air di lautan', isCorrect: false }
+                    { text: 'Because mendistribusikan air bersih ke berbagai daratan secara merata', isCorrect: true },
+                    { text: 'Membuat bumi menjadi kering kerontang', isCorrect: false },
+                    { text: 'Menghentikan turunnya hujan selamanya', isCorrect: false },
+                    { text: 'Menghilangkan seluruh air di lautan', isCorrect: false }
                 ],
                 explanation: 'Siklus air mendaur ulang air di bumi sehingga tumbuhan, hewan, dan manusia tidak pernah kehabisan pasokan air.'
             }
         ];
 
-        // Shuffle helper function to randomize options for every question so answer isn't always A
         function prepareRandomizedQuestions() {
             gameState.randomizedQuestions = rawQuestionsData.map((q) => {
                 let opts = [...q.options];
@@ -918,10 +938,14 @@
 
         prepareRandomizedQuestions();
 
-        // Navigation Functions
         function renderApp() {
             const app = document.getElementById('app');
             app.innerHTML = '';
+
+            if (gameState.mainTab === 'game') {
+                renderMiniGameScreen();
+                return;
+            }
 
             if (gameState.step === 'welcome') {
                 app.innerHTML = renderWelcomeScreen();
@@ -947,526 +971,597 @@
             }
         }
 
-        // 1. Welcome Screen
         function renderWelcomeScreen() {
             return `
-                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 text-center border-4 border-emerald-400 relative overflow-hidden">
-                    <div class="absolute -top-10 -right-10 w-32 h-32 bg-emerald-100 rounded-full blur-xl pointer-events-none"></div>
-                    <div class="absolute -bottom-10 -left-10 w-32 h-32 bg-blue-100 rounded-full blur-xl pointer-events-none"></div>
-                    
-                    <div class="inline-block bg-emerald-100 text-emerald-800 font-bold px-4 py-1.5 rounded-full text-sm mb-4">
-                        ✨ Game Edukasi Interaktif Kelas 5 SD/MI ✨
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 border-4 border-emerald-400 text-center max-w-xl mx-auto">
+                    <div class="inline-block p-4 bg-emerald-100 rounded-full text-emerald-700 text-4xl mb-4 floating">
+                        🌍🎒
                     </div>
-
-                    <h1 class="text-3xl sm:text-5xl font-extrabold text-emerald-600 mb-2 tracking-tight">
-                        PETUALANGAN IPAS
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-800 mb-2">
+                        Petualangan IPAS Kelas 5 SD/MI
                     </h1>
-                    <h2 class="text-xl sm:text-2xl font-bold text-slate-700 mb-6">
-                        IPAS Kelas 5 SD/MI
-                    </h2>
+                    <p class="text-slate-600 text-xs sm:text-sm mb-6">
+                        Jelajahi pengetahuan alam dan sosial bersama media belajar interaktif terlengkap (Bab 1 - Bab 4).
+                    </p>
 
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 max-w-lg mx-auto text-xs font-semibold text-slate-600">
-                        <div class="bg-emerald-50 p-3 rounded-2xl border border-emerald-200 flex flex-col items-center justify-center floating">
-                            <span class="text-2xl mb-1">🗺️</span> Peta & Indonesia
+                    <div class="mb-6 text-left">
+                        <label class="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Masukkan Nama Lengkap Kamu:</label>
+                        <input type="text" id="nameInput" placeholder="Contoh: Budi Santoso" value="${gameState.studentName}"
+                            class="w-full px-4 py-3 rounded-xl border-2 border-slate-300 focus:border-emerald-500 focus:outline-none font-bold text-slate-800 bg-slate-50 text-sm">
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <button onclick="handleStartQuiz()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg transition text-sm flex items-center justify-center gap-2 pulse-btn">
+                            <span>🎯</span> MULAI KUIS 50 SOAL
+                        </button>
+                        <button onclick="handleOpenMaterial()" class="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl shadow-lg transition text-sm flex items-center justify-center gap-2">
+                            <span>📚</span> BACA MATERI BAB
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleStartQuiz() {
+            const input = document.getElementById('nameInput');
+            const name = input ? input.value.trim() : '';
+            if (!name) {
+                showCustomModal("Nama Belum Diisi", "Silakan masukkan nama lengkap kamu terlebih dahulu sebelum mulai belajar!", "✍️");
+                return;
+            }
+            gameState.studentName = name;
+            gameState.step = 'instructions';
+            speakText(`Selamat datang, ${name}. Mari mulai petualangan IPAS.`);
+            renderApp();
+        }
+
+        function handleOpenMaterial() {
+            const input = document.getElementById('nameInput');
+            const name = input ? input.value.trim() : '';
+            if (!name) {
+                showCustomModal("Nama Belum Diisi", "Silakan masukkan nama lengkap kamu terlebih dahulu!", "✍️");
+                return;
+            }
+            gameState.studentName = name;
+            gameState.step = 'material';
+            renderApp();
+        }
+
+        function renderInstructionsScreen() {
+            return `
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-8 border-4 border-emerald-400 max-w-xl mx-auto">
+                    <div class="text-center mb-4">
+                        <span class="text-3xl">💡</span>
+                        <h2 class="text-xl font-extrabold text-slate-800">Petunjuk Pengerjaan</h2>
+                    </div>
+
+                    <div class="space-y-3 text-xs sm:text-sm text-slate-600 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                        <div class="flex items-start gap-2">
+                            <span>✅</span>
+                            <div>Terdapat <b>50 soal pilihan ganda</b> berkualitas dari Bab 1 hingga Bab 4.</div>
                         </div>
-                        <div class="bg-blue-50 p-3 rounded-2xl border border-blue-200 flex flex-col items-center justify-center floating" style="animation-delay: 0.5s;">
-                            <span class="text-2xl mb-1">💰</span> Ekonomi & Pasar
+                        <div class="flex items-start gap-2">
+                            <span>❤️</span>
+                            <div>Kamu memiliki <b>3 nyawa</b>. Setiap jawaban salah akan mengurangi 1 nyawa.</div>
                         </div>
-                        <div class="bg-amber-50 p-3 rounded-2xl border border-amber-200 flex flex-col items-center justify-center floating" style="animation-delay: 1s;">
-                            <span class="text-2xl mb-1">🌳</span> Ekosistem Alam
+                        <div class="flex items-start gap-2">
+                            <span>⭐</span>
+                            <div>Setiap jawaban benar bernilai +20 poin. Raih skor maksimal 1000!</div>
                         </div>
-                        <div class="bg-cyan-50 p-3 rounded-2xl border border-cyan-200 flex flex-col items-center justify-center floating" style="animation-delay: 1.5s;">
-                            <span class="text-2xl mb-1">💧</span> Air & Siklus
+                        <div class="flex items-start gap-2">
+                            <span>🕹️</span>
+                            <div>Bisa juga beralih ke <b>Mini Game</b> kapan saja melalui tombol navigasi atas.</div>
                         </div>
                     </div>
 
-                    <div class="max-w-md mx-auto bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6">
-                        <label for="studentNameInput" class="block text-sm font-bold text-slate-700 mb-2">
-                            Masukkan Nama Kamu:
-                        </label>
-                        <input type="text" id="studentNameInput" placeholder="Contoh: Budi Santoso" 
-                            class="w-full px-4 py-3 rounded-xl border-2 border-emerald-300 focus:border-emerald-500 focus:outline-none text-center font-bold text-lg text-slate-800 bg-white"
-                            value="${gameState.studentName}">
-                    </div>
-
-                    <button onclick="handleStartAdventure()" class="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg transition transform hover:-translate-y-0.5 text-lg pulse-btn">
-                        🚀 MULAI BELAJAR
+                    <button onclick="startQuizActual()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow text-sm transition pulse-btn">
+                        🚀 SAYA SIAP, MULAI SEKARANG!
                     </button>
                 </div>
             `;
         }
 
-        function handleStartAdventure() {
-            const input = document.getElementById('studentNameInput').value.trim();
-            if (!input) {
-                showCustomModal("Nama Belum Diisi", "Mohon masukkan nama kamu terlebih dahulu ya!", "⚠️");
-                return;
-            }
-            gameState.studentName = input;
-            gameState.step = 'instructions';
-            speakText(`Halo, ${gameState.studentName}! Selamat datang di Petualangan IPAS Kelas 5.`);
-            renderApp();
-        }
-
-        // 2. Instructions Screen
-        function renderInstructionsScreen() {
-            return `
-                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 border-4 border-blue-400">
-                    <div class="text-center mb-6">
-                        <span class="text-3xl">📜</span>
-                        <h2 class="text-2xl sm:text-3xl font-extrabold text-blue-600 mt-2">PETUNJUK PERMAINAN</h2>
-                        <p class="text-slate-600 text-sm mt-1">Halo, <b>${gameState.studentName}</b>! Perhatikan cara bermain berikut ini:</p>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 text-sm text-slate-700">
-                        <div class="bg-blue-50 p-4 rounded-2xl border border-blue-200 flex items-start gap-3">
-                            <span class="text-xl">📚</span>
-                            <div><b>1. Pelajari Materi:</b> Baca rangkuman materi IPAS Bab 1 sampai Bab 4 sebelum atau saat kuis.</div>
-                        </div>
-                        <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 flex items-start gap-3">
-                            <span class="text-xl">❤️</span>
-                            <div><b>2. Sistem 3 Nyawa:</b> Kamu memiliki 3 nyawa (❤️). Jika salah menjawab 3 kali, permainan berakhir!</div>
-                        </div>
-                        <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200 flex items-start gap-3">
-                            <span class="text-xl">❓</span>
-                            <div><b>3. 50 Soal Tantangan:</b> Kerjakan total 50 soal pilihan ganda acak yang disebar merata dari semua bab.</div>
-                        </div>
-                        <div class="bg-purple-50 p-4 rounded-2xl border border-purple-200 flex items-start gap-3">
-                            <span class="text-xl">⭐</span>
-                            <div><b>4. Poin & Pembahasan:</b> Setiap jawaban benar bernilai 20 poin (Maks 1000). Dapatkan pembahasan lengkap.</div>
-                        </div>
-                        <div class="bg-rose-50 p-4 rounded-2xl border border-rose-200 flex items-start gap-3">
-                            <span class="text-xl">📖</span>
-                            <div><b>5. Akses Materi Kapan Saja:</b> Bisa kembali membaca materi saat mengerjakan kuis tanpa kehilangan progress jawaban atau skor!</div>
-                        </div>
-                        <div class="bg-cyan-50 p-4 rounded-2xl border border-cyan-200 flex items-start gap-3">
-                            <span class="text-xl">🏆</span>
-                            <div><b>6. Sertifikat Digital:</b> Selesaikan semua soal sampai akhir untuk mendapatkan sertifikat penghargaan namamu.</div>
-                        </div>
-                    </div>
-
-                    <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                        <button onclick="goToMaterial()" class="px-6 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl shadow transition text-base">
-                            🌏 BACA MATERI DULU
-                        </button>
-                        <button onclick="startQuizDirectly()" class="px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow transition text-base pulse-btn">
-                            🎯 MULAI KUIS SEKARANG
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-
-        function goToMaterial() {
-            gameState.step = 'material';
-            renderApp();
-        }
-
-        function startQuizDirectly() {
+        function startQuizActual() {
             gameState.step = 'quiz';
-            gameState.currentQuestionIndex = 0;
-            gameState.lives = 3;
             renderApp();
         }
 
-        // 3. Material Learning Screen (Bab 1 - 4)
+        const materialsData = {
+            bab1: {
+                title: "Bab 1: Di Mana Indonesia Berada?",
+                content: `Indonesia adalah negara kepulauan terbesar di dunia yang terletak di antara dua benua (Asia dan Australia) serta dua samudra (Pasifik dan Hindia). Wilayah Indonesia dilalui oleh garis khatulistiwa yang memberikan iklim tropis dengan dua musim (hujan dan kemarau). Bentukan alam daratan dan perairan yang kaya membuat Indonesia kaya akan sumber daya alam serta budaya.`
+            },
+            bab2: {
+                title: "Bab 2: Majulah Daerahku!",
+                content: `Manusia memiliki kebutuhan primer (makanan, pakaian, rumah) dan sekunder. Dalam memenuhi kebutuhan, terdapat pelaku ekonomi yang menjalankan kegiatan Produksi (menghasilkan barang), Distribusi (menyalurkan barang), dan Konsumsi (menghabiskan nilai guna barang). Kondisi geografis mempengaruhi jenis pekerjaan masyarakat di setiap daerah.`
+            },
+            bab3: {
+                title: "Bab 3: Harmoni dalam Ekosistem",
+                content: `Ekosistem adalah hubungan timbal balik antara komponen biotik (makhluk hidup) dan komponen abiotik (benda tak hidup). Di dalam ekosistem terdapat rantai makanan dan jaring-jaring makanan yang menjaga keseimbangan alam. Peran pengurai (dekomposer) sangat penting untuk menyuburkan tanah.`
+            },
+            bab4: {
+                title: "Bab 4: Air Sumber Kehidupan",
+                content: `Siklus air (siklus hidrologi) adalah perputaran air dari bumi ke atmosfer lalu kembali lagi ke bumi melalui proses evaporasi (penguapan), kondensasi (pengembunan), presipitasi (hujan), dan infiltrasi (penyerapan ke dalam tanah). Menjaga ketersediaan air bersih dan merawat pohon sangat penting bagi kehidupan.`
+            }
+        };
+
         function renderMaterialScreen() {
+            const currentMat = materialsData[gameState.activeTabBab];
             return `
-                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-8 border-4 border-emerald-400 flex flex-col max-h-[85vh]">
-                    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 pb-4 border-b border-slate-200 gap-4">
-                        <div>
-                            <h2 class="text-2xl font-extrabold text-emerald-600">🌏 MATERI PEMBELAJARAN IPAS KELAS 5</h2>
-                            <p class="text-slate-600 text-sm">Pilih Bab materi yang ingin kamu pelajari di bawah ini:</p>
-                        </div>
-                        <button onclick="backFromMaterial()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl shadow text-sm transition">
-                            ${Object.keys(gameState.quizAnswers).length > 0 || gameState.currentQuestionIndex > 0 ? '↩ KEMBALI KE KUIS' : '🎯 LANJUT KE KUIS'}
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-8 border-4 border-amber-400">
+                    <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-200">
+                        <h2 class="text-lg sm:text-xl font-extrabold text-amber-700">📚 Ringkasan Materi IPAS Kelas 5</h2>
+                        <button onclick="backToQuizOrWelcome()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs">
+                            ⬅ KEMBALI
                         </button>
                     </div>
 
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
-                        <button onclick="setActiveBab('bab1')" class="py-3 px-3 rounded-xl font-bold text-xs sm:text-sm transition ${gameState.activeTabBab === 'bab1' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
-                            🌏 Bab 1: Indonesia
-                        </button>
-                        <button onclick="setActiveBab('bab2')" class="py-3 px-3 rounded-xl font-bold text-xs sm:text-sm transition ${gameState.activeTabBab === 'bab2' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
-                            💰 Bab 2: Majulah Daerahku
-                        </button>
-                        <button onclick="setActiveBab('bab3')" class="py-3 px-3 rounded-xl font-bold text-xs sm:text-sm transition ${gameState.activeTabBab === 'bab3' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
-                            🌳 Bab 3: Ekosistem
-                        </button>
-                        <button onclick="setActiveBab('bab4')" class="py-3 px-3 rounded-xl font-bold text-xs sm:text-sm transition ${gameState.activeTabBab === 'bab4' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
-                            💧 Bab 4: Air Sumber Hidup
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        <button onclick="switchMaterialTab('bab1')" class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${gameState.activeTabBab === 'bab1' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">Bab 1</button>
+                        <button onclick="switchMaterialTab('bab2')" class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${gameState.activeTabBab === 'bab2' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">Bab 2</button>
+                        <button onclick="switchMaterialTab('bab3')" class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${gameState.activeTabBab === 'bab3' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">Bab 3</button>
+                        <button onclick="switchMaterialTab('bab4')" class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${gameState.activeTabBab === 'bab4' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">Bab 4</button>
+                    </div>
+
+                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6">
+                        <h3 class="text-base font-extrabold text-slate-800 mb-2">${currentMat.title}</h3>
+                        <p class="text-slate-700 text-xs sm:text-sm leading-relaxed mb-4">${currentMat.content}</p>
+                        <button onclick="speakText('${currentMat.content}')" class="px-3.5 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                            🔊 Bacakan Materi
                         </button>
                     </div>
 
-                    <div class="overflow-y-auto pr-2 flex-grow space-y-6 text-slate-700 text-sm sm:text-base leading-relaxed">
-                        ${getBabContentHTML(gameState.activeTabBab)}
+                    <div class="flex justify-end">
+                        <button onclick="startQuizActual()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow text-xs">
+                            🎯 LANJUT KE KUIS SOAL
+                        </button>
                     </div>
                 </div>
             `;
         }
 
-        function setActiveBab(babKey) {
+        function switchMaterialTab(babKey) {
             gameState.activeTabBab = babKey;
             renderApp();
         }
 
-        function backFromMaterial() {
-            if (Object.keys(gameState.quizAnswers).length > 0 || gameState.currentQuestionIndex > 0) {
-                gameState.step = 'quiz';
-            } else {
-                gameState.step = 'quiz';
-                gameState.currentQuestionIndex = 0;
-            }
+        function backToQuizOrWelcome() {
+            gameState.step = 'quiz';
             renderApp();
         }
 
-        function getBabContentHTML(bab) {
-            if (bab === 'bab1') {
-                return `
-                    <div class="space-y-4">
-                        <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200">
-                            <h3 class="font-extrabold text-emerald-800 text-lg mb-2">BAB 1 – DI MANA INDONESIA BERADA?</h3>
-                            <p class="text-slate-600">Mempelajari letak geografis, daratan, lautan, serta karakteristik Indonesia sebagai negara maritim dan agraris.</p>
-                        </div>
-                        <div class="space-y-3">
-                            <h4 class="font-bold text-slate-800 text-base">A. Daratan dan Lautan di Indonesia</h4>
-                            <p>Indonesia adalah negara kepulauan terbesar di dunia. Wilayah perairan atau lautan Indonesia jauh lebih luas dibandingkan daratannya. Kenampakan alam daratan meliputi pulau-pulau besar (Sumatra, Jawa, Kalimantan, Sulawesi, Papua), gunung berapi, dataran rendah, dan lembah.</p>
-                        </div>
-                        <div class="space-y-3">
-                            <h4 class="font-bold text-slate-800 text-base">B. Indonesia, Zamrud di Khatulistiwa</h4>
-                            <p>Indonesia terletak di sekitar garis khatulistiwa (0 derajat). Kota Pontianak adalah salah satu wilayah yang dilalui garis ini. Posisi ini memberikan iklim tropis dengan dua musim serta kekayaan alam hutan hujan yang hijau subur.</p>
-                        </div>
-                    </div>
-                `;
-            } else if (bab === 'bab2') {
-                return `
-                    <div class="space-y-4">
-                        <div class="bg-blue-50 p-4 rounded-2xl border border-blue-200">
-                            <h3 class="font-extrabold text-blue-800 text-lg mb-2">BAB 2 – MAJULAH DAERAHKU!</h3>
-                            <p class="text-slate-600">Mempelajari kebutuhan manusia, kegiatan ekonomi (produksi, distribusi, konsumsi), serta cara menjadi pelaku ekonomi yang bijak.</p>
-                        </div>
-                        <div class="space-y-3">
-                            <h4 class="font-bold text-slate-800 text-base">A. Kebutuhan Manusia</h4>
-                            <p>Kebutuhan adalah segala sesuatu yang diperlukan manusia untuk kelangsungan hidup. Kebutuhan pokok (primer) meliputi makanan, pakaian, dan rumah.</p>
-                        </div>
-                        <div class="space-y-3">
-                            <h4 class="font-bold text-slate-800 text-base">B. Kegiatan Ekonomi</h4>
-                            <p>Terdiri dari produksi (menghasilkan barang), distribusi (menyalurkan barang), dan konsumsi (menghabiskan nilai guna barang).</p>
-                        </div>
-                    </div>
-                `;
-            } else if (bab === 'bab3') {
-                return `
-                    <div class="space-y-4">
-                        <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200">
-                            <h3 class="font-extrabold text-amber-800 text-lg mb-2">BAB 3 – HARMONI DALAM EKOSISTEM</h3>
-                            <p class="text-slate-600">Mengenal ekosistem, komponen biotik & abiotik, rantai makanan, jaring-jaring makanan, serta peran manusia.</p>
-                        </div>
-                        <div class="space-y-3">
-                            <h4 class="font-bold text-slate-800 text-base">A. Komponen Ekosistem</h4>
-                            <p>Ekosistem terdiri dari komponen biotik (makhluk hidup) dan abiotik (benda tak hidup seperti air, tanah, dan cahaya matahari).</p>
-                        </div>
-                        <div class="space-y-3">
-                            <h4 class="font-bold text-slate-800 text-base">B. Rantai Makanan</h4>
-                            <p>Peristiwa makan dan dimakan dengan urutan tertentu: Produsen -> Konsumen -> Pengurai (dekomposer).</p>
-                        </div>
-                    </div>
-                `;
-            } else if (bab === 'bab4') {
-                return `
-                    <div class="space-y-4">
-                        <div class="bg-cyan-50 p-4 rounded-2xl border border-cyan-200">
-                            <h3 class="font-extrabold text-cyan-800 text-lg mb-2">BAB 4 – AIR SUMBER KEHIDUPAN</h3>
-                            <p class="text-slate-600">Mempelajari aliran air, siklus air, serta pentingnya menjaga ketersediaan air bersih di lingkungan.</p>
-                        </div>
-                        <div class="space-y-3">
-                            <h4 class="font-bold text-slate-800 text-base">A. Siklus Air (Hidrologi)</h4>
-                            <p>Terdiri atas evaporasi (penguapan), kondensasi (pengembunan menjadi awan), presipitasi (hujan), dan infiltrasi (penyerapan ke tanah).</p>
-                        </div>
-                    </div>
-                `;
-            }
-        }
-
-        // 4. Quiz Screen
         function renderQuizScreen() {
-            const qIndex = gameState.currentQuestionIndex;
-            const currentQ = gameState.randomizedQuestions[qIndex];
-            const totalQ = gameState.randomizedQuestions.length;
-            const savedAns = gameState.quizAnswers[qIndex];
-
+            const qIdx = gameState.currentQuestionIndex;
+            const q = gameState.randomizedQuestions[qIdx];
             let livesHearts = '';
             for (let i = 0; i < 3; i++) {
                 livesHearts += i < gameState.lives ? '❤️' : '🖤';
             }
 
             return `
-                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-8 border-4 border-indigo-400">
-                    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 pb-4 border-b border-slate-200 gap-3">
+                <div class="bg-white rounded-3xl card-shadow p-5 sm:p-8 border-4 border-emerald-400 max-w-2xl mx-auto w-full">
+                    <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 text-xs sm:text-sm font-bold">
+                        <span class="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-xl">Soal ${qIdx + 1} dari 50 (Bab ${q.bab})</span>
                         <div class="flex items-center gap-3">
-                            <span class="bg-indigo-100 text-indigo-800 font-bold px-3 py-1 rounded-full text-xs">
-                                SOAL ${qIndex + 1} DARI ${totalQ} (Bab ${currentQ.bab})
-                            </span>
-                            <span class="bg-rose-100 text-rose-800 font-bold px-3 py-1 rounded-full text-xs flex items-center gap-1">
-                                Nyawa: ${livesHearts}
-                            </span>
-                        </div>
-                        <div class="flex items-center gap-4 text-sm font-bold text-slate-700">
-                            <span>👤 ${gameState.studentName}</span>
-                            <span class="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full">⭐ Skor: ${gameState.score}</span>
+                            <span class="bg-amber-100 text-amber-800 px-3 py-1 rounded-xl">⭐ Skor: ${gameState.score}</span>
+                            <span class="bg-rose-100 text-rose-800 px-3 py-1 rounded-xl">Nyawa: ${livesHearts}</span>
                         </div>
                     </div>
 
-                    <div class="mb-6">
-                        <h3 class="text-lg sm:text-xl font-bold text-slate-800 leading-snug">
-                            ${currentQ.question}
-                        </h3>
+                    <div class="mb-5">
+                        <h2 class="text-base sm:text-lg font-extrabold text-slate-800 leading-snug mb-3">
+                            ${q.question}
+                        </h2>
+                        <button onclick="speakText('${q.question}')" class="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                            🔊 Bacakan Soal
+                        </button>
                     </div>
 
                     <div class="space-y-3 mb-6">
-                        ${currentQ.options.map(opt => {
-                            let btnStyle = "bg-slate-50 hover:bg-indigo-50 border-slate-200 text-slate-700";
-                            if (savedAns && savedAns.selected === opt.key) {
-                                btnStyle = "bg-indigo-600 text-white border-indigo-600 shadow-md";
-                            }
-                            return `
-                                <button onclick="selectAnswer('${opt.key}')" 
-                                    class="w-full text-left p-4 rounded-2xl border-2 font-medium transition flex items-center gap-4 ${btnStyle}">
-                                    <span class="w-8 h-8 rounded-xl bg-white text-indigo-600 font-bold flex items-center justify-center shadow-sm flex-shrink-0">
-                                        ${opt.key}
-                                    </span>
-                                    <span class="text-sm sm:text-base">${opt.text}</span>
-                                </button>
-                            `;
-                        }).join('')}
+                        ${q.options.map(opt => `
+                            <button onclick="handleSelectAnswer('${opt.key}')" 
+                                class="w-full text-left p-3.5 sm:p-4 rounded-2xl border-2 border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 transition font-medium text-xs sm:text-sm flex items-center gap-3 text-slate-700">
+                                <span class="w-7 h-7 rounded-xl bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0">${opt.key}</span>
+                                <span>${opt.text}</span>
+                            </button>
+                        `).join('')}
                     </div>
 
-                    <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-slate-200">
-                        <button onclick="goToMaterialFromQuiz()" class="w-full sm:w-auto px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow text-sm transition flex items-center justify-center gap-2">
-                            📚 KEMBALI KE MATERI
+                    <div class="flex justify-between items-center pt-3 border-t border-slate-200">
+                        <button onclick="goToMaterial()" class="px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold rounded-xl text-xs transition">
+                            📚 Lihat Materi
                         </button>
-
-                        <button onclick="submitAnswer()" ${!savedAns ? 'disabled opacity-50 cursor-not-allowed' : ''} 
-                            class="w-full sm:w-auto px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow text-base transition">
-                            ${qIndex === totalQ - 1 ? '🏁 SELESAI & LIHAT HASIL' : '➡ JAWAB & LANJUT'}
-                        </button>
+                        <span class="text-xs text-slate-400">Petualangan IPAS Kelas 5 SD</span>
                     </div>
                 </div>
             `;
         }
 
-        function selectAnswer(key) {
-            const qIndex = gameState.currentQuestionIndex;
-            gameState.quizAnswers[qIndex] = { selected: key };
-            renderApp();
-        }
+        function handleSelectAnswer(selectedKey) {
+            const qIdx = gameState.currentQuestionIndex;
+            const q = gameState.randomizedQuestions[qIdx];
+            const correctObj = q.options.find(o => o.isCorrect);
+            const isCorrect = (selectedKey === q.correctKey);
 
-        function goToMaterialFromQuiz() {
-            gameState.step = 'material';
-            renderApp();
-        }
-
-        function submitAnswer() {
-            const qIndex = gameState.currentQuestionIndex;
-            const currentQ = gameState.randomizedQuestions[qIndex];
-            const ans = gameState.quizAnswers[qIndex];
-
-            if (!ans) return;
-
-            const isCorrect = (ans.selected === currentQ.correctKey);
-            gameState.quizAnswers[qIndex].isCorrect = isCorrect;
+            gameState.selectedAnswer = selectedKey;
+            gameState.quizAnswers[qIdx] = { selected: selectedKey, isCorrect };
 
             if (isCorrect) {
                 gameState.score += 20;
                 gameState.correctCount++;
-                speakText(`Benar, ${gameState.studentName}! Hebat sekali!`);
+                speakText("Benar sekali!");
             } else {
-                gameState.incorrectCount++;
                 gameState.lives--;
-                speakText(`Belum tepat, ${gameState.studentName}. Yuk, pelajari kembali materinya.`);
-            }
-
-            if (gameState.lives <= 0) {
-                gameState.step = 'gameover';
-                speakText(`Sayang sekali, ${gameState.studentName}. Nyawamu habis.`);
-                renderApp();
-                return;
+                gameState.incorrectCount++;
+                speakText("Kurang tepat.");
             }
 
             gameState.step = 'feedback';
             renderApp();
         }
 
-        // 5. Feedback Screen
         function renderFeedbackScreen() {
-            const qIndex = gameState.currentQuestionIndex;
-            const currentQ = gameState.randomizedQuestions[qIndex];
-            const ans = gameState.quizAnswers[qIndex];
-            const isCorrect = ans.isCorrect;
-            const correctOptionObj = currentQ.options.find(o => o.key === currentQ.correctKey);
+            const qIdx = gameState.currentQuestionIndex;
+            const q = gameState.randomizedQuestions[qIdx];
+            const userAns = gameState.quizAnswers[qIdx];
+            const isCorrect = userAns ? userAns.isCorrect : false;
 
             return `
-                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 border-4 ${isCorrect ? 'border-emerald-400' : 'border-rose-400'} max-w-2xl mx-auto text-center">
-                    <div class="mb-4">
-                        <span class="text-5xl">${isCorrect ? '✅' : '❌'}</span>
-                    </div>
-
-                    <h2 class="text-2xl sm:text-3xl font-extrabold mb-1 ${isCorrect ? 'text-emerald-600' : 'text-rose-600'}">
-                        ${isCorrect ? '✓ BENAR!' : '✗ BELUM TEPAT'}
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-8 border-4 ${isCorrect ? 'border-emerald-400' : 'border-rose-400'} max-w-xl mx-auto w-full text-center">
+                    <div class="text-5xl mb-3">${isCorrect ? '🎉' : '❌'}</div>
+                    <h2 class="text-xl sm:text-2xl font-extrabold ${isCorrect ? 'text-emerald-700' : 'text-rose-700'} mb-2">
+                        ${isCorrect ? 'Jawaban Kamu Benar!' : 'Jawaban Kamu Kurang Tepat!'}
                     </h2>
-                    <p class="text-slate-600 text-sm mb-6 font-medium">
-                        ${isCorrect ? `Hebat, ${gameState.studentName}!` : `${gameState.studentName}, jangan menyerah! (Sisa Nyawa: ${gameState.lives} ❤️)`}
+                    <p class="text-slate-600 text-xs sm:text-sm mb-4">
+                        ${isCorrect ? 'Hebat! Kamu mendapatkan +20 poin.' : `Jawaban yang benar adalah pilihan <b>${q.correctKey}</b>.`}
                     </p>
 
-                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-left mb-6 space-y-3">
-                        ${!isCorrect ? `
-                            <div class="text-sm font-bold text-rose-600">
-                                Jawaban yang benar adalah Pilihan [${currentQ.correctKey}]: ${correctOptionObj ? correctOptionObj.text : ''}
-                            </div>
-                        ` : ''}
-                        <div>
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Pembahasan:</span>
-                            <p class="text-slate-700 text-sm sm:text-base leading-relaxed">${currentQ.explanation}</p>
-                        </div>
+                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left mb-6 text-xs sm:text-sm text-slate-700">
+                        <b class="block text-slate-900 mb-1">Penjelasan Konsep:</b>
+                        ${q.explanation}
                     </div>
 
-                    <button onclick="nextQuestion()" class="w-full sm:w-auto px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg transition text-base pulse-btn">
-                        ➡ LANJUT KE SOAL BERIKUTNYA
+                    <button onclick="handleNextQuestion()" class="w-full py-3.5 ${isCorrect ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-800 hover:bg-slate-900'} text-white font-bold rounded-2xl shadow transition text-sm pulse-btn">
+                        LANJUT SOAL BERIKUTNYA ➡
                     </button>
                 </div>
             `;
         }
 
-        function nextQuestion() {
+        function handleNextQuestion() {
+            if (gameState.lives <= 0) {
+                gameState.step = 'gameover';
+                renderApp();
+                return;
+            }
+
             gameState.currentQuestionIndex++;
             if (gameState.currentQuestionIndex >= gameState.randomizedQuestions.length) {
                 gameState.step = 'result';
-                speakText(`Selamat, ${gameState.studentName}! Kamu telah menyelesaikan 50 soal IPAS.`);
             } else {
                 gameState.step = 'quiz';
-                speakText(`Bagus, ${gameState.studentName}. Sekarang kita lanjut ke soal berikutnya.`);
             }
             renderApp();
         }
 
-        // 6. Game Over Screen
         function renderGameOverScreen() {
             return `
-                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 border-4 border-rose-400 max-w-2xl mx-auto text-center">
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-8 border-4 border-rose-500 max-w-md mx-auto text-center">
                     <div class="text-5xl mb-3">💔</div>
-                    <h2 class="text-3xl font-extrabold text-rose-600 mb-1">PERMAINAN BERAKHIR</h2>
-                    <p class="text-slate-600 text-sm mb-6">Maaf, <b>${gameState.studentName}</b>, nyawamu telah habis (0/3).</p>
-
-                    <div class="bg-rose-50 border-2 border-rose-200 rounded-2xl p-6 mb-6">
-                        <div class="text-sm font-bold text-slate-700 mb-2">Jangan berkecil hati! Yuk pelajari materinya lagi agar semakin pintar.</div>
-                        <div class="text-emerald-700 font-bold text-base">Skor Sementara Kamu: ${gameState.score}</div>
-                    </div>
-
-                    <div class="flex flex-col sm:flex-row justify-center gap-4">
-                        <button onclick="goToMaterial()" class="px-6 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl shadow transition text-base">
-                            📚 BACA MATERI DULU
-                        </button>
-                        <button onclick="restartQuiz()" class="px-6 py-3.5 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-2xl shadow transition text-base">
-                            🔄 COBA LAGI (ULANGI)
+                    <h2 class="text-2xl font-extrabold text-rose-700 mb-2">Permainan Berakhir!</h2>
+                    <p class="text-slate-600 text-xs sm:text-sm mb-6">
+                        Nyawa kamu habis. Jangan menyerah, ayo pelajari materinya lagi dan coba uji kemampuanmu kembali!
+                    </p>
+                    <div class="flex gap-3">
+                        <button onclick="restartQuiz()" class="w-100 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition">
+                            🔄 Coba Lagi Dari Awal
                         </button>
                     </div>
                 </div>
             `;
-        }
-
-        // 7. Result Screen
-        function renderResultScreen() {
-            return `
-                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 border-4 border-emerald-400 max-w-2xl mx-auto text-center">
-                    <div class="text-5xl mb-3">🎉</div>
-                    <h2 class="text-3xl font-extrabold text-emerald-600 mb-1">KUIS SELESAI!</h2>
-                    <p class="text-slate-600 text-sm mb-6">Selamat, <b>${gameState.studentName}</b>!</p>
-
-                    <div class="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-6 mb-6">
-                        <div class="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">Total Skor Kamu</div>
-                        <div class="text-4xl sm:text-5xl font-extrabold text-emerald-700 mb-2">${gameState.score} <span class="text-xl text-slate-400">/ 1000</span></div>
-                        <div class="flex justify-center gap-6 text-sm font-semibold text-slate-600 mt-4 pt-4 border-t border-emerald-200/60">
-                            <span class="text-emerald-600">✅ Benar: ${gameState.correctCount}</span>
-                            <span class="text-rose-600">❌ Salah: ${gameState.incorrectCount}</span>
-                        </div>
-                    </div>
-
-                    <div class="flex flex-col sm:flex-row justify-center gap-4">
-                        <button onclick="viewCertificate()" class="px-6 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl shadow transition text-base flex items-center justify-center gap-2">
-                            🏆 LIHAT SERTIFIKAT
-                        </button>
-                        <button onclick="restartQuiz()" class="px-6 py-3.5 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-2xl shadow transition text-base flex items-center justify-center gap-2">
-                            🔄 ULANGI KUIS
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-
-        function viewCertificate() {
-            gameState.step = 'certificate';
-            renderApp();
         }
 
         function restartQuiz() {
-            prepareRandomizedQuestions();
             gameState.currentQuestionIndex = 0;
             gameState.score = 0;
             gameState.correctCount = 0;
             gameState.incorrectCount = 0;
             gameState.lives = 3;
-            gameState.selectedAnswer = null;
             gameState.quizAnswers = {};
+            prepareRandomizedQuestions();
             gameState.step = 'quiz';
             renderApp();
         }
 
-        // 8. Certificate Screen
-        function renderCertificateScreen() {
-            const currentDate = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+        function renderResultScreen() {
             return `
-                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 border-8 border-amber-300 max-w-2xl mx-auto text-center relative overflow-hidden">
-                    <div class="absolute top-2 left-2 text-amber-300 text-2xl">★</div>
-                    <div class="absolute top-2 right-2 text-amber-300 text-2xl">★</div>
-                    <div class="absolute bottom-2 left-2 text-amber-300 text-2xl">★</div>
-                    <div class="absolute bottom-2 right-2 text-amber-300 text-2xl">★</div>
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-8 border-4 border-emerald-500 max-w-xl mx-auto text-center">
+                    <div class="text-5xl mb-2">🏆</div>
+                    <h2 class="text-2xl font-extrabold text-emerald-700 mb-1">Kuis Selesai, Luar Biasa!</h2>
+                    <p class="text-slate-600 text-xs sm:text-sm mb-6">Selamat <b>${gameState.studentName}</b> telah menyelesaikan 50 soal IPAS Kelas 5.</p>
 
-                    <div class="text-xs font-bold uppercase tracking-widest text-amber-600 mb-1">SERTIFIKAT PENGHARGAAN</div>
-                    <h2 class="text-2xl sm:text-4xl font-extrabold text-slate-800 mb-2">PETUALANGAN IPAS KELAS 5</h2>
-                    <p class="text-xs text-slate-500 mb-6">Diberikan dengan bangga kepada:</p>
-
-                    <div class="text-2xl sm:text-3xl font-bold text-emerald-600 border-b-2 border-emerald-300 pb-2 mb-4 inline-block px-6">
-                        ${gameState.studentName}
+                    <div class="grid grid-cols-3 gap-3 mb-6">
+                        <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200">
+                            <div class="text-xs text-emerald-700 font-bold mb-1">Total Skor</div>
+                            <div class="text-xl sm:text-2xl font-extrabold text-emerald-800">${gameState.score} / 1000</div>
+                        </div>
+                        <div class="bg-indigo-50 p-4 rounded-2xl border border-indigo-200">
+                            <div class="text-xs text-indigo-700 font-bold mb-1">Benar</div>
+                            <div class="text-xl sm:text-2xl font-extrabold text-indigo-800">${gameState.correctCount}</div>
+                        </div>
+                        <div class="bg-rose-50 p-4 rounded-2xl border border-rose-200">
+                            <div class="text-xs text-rose-700 font-bold mb-1">Salah</div>
+                            <div class="text-xl sm:text-2xl font-extrabold text-rose-800">${gameState.incorrectCount}</div>
+                        </div>
                     </div>
 
-                    <p class="text-slate-600 text-sm max-w-md mx-auto mb-6 leading-relaxed">
-                        Atas keberhasilannya menyelesaikan 50 soal uji kompetensi IPAS Kelas 5 SD/MI dengan sangat baik.
-                    </p>
-
-                    <div class="flex justify-center gap-6 bg-amber-50/60 p-4 rounded-2xl border border-amber-200 mb-6 max-w-sm mx-auto text-sm font-bold text-slate-700">
-                        <div>Skor: <span class="text-emerald-600">${gameState.score} / 1000</span></div>
-                        <div>Benar: <span class="text-emerald-600">${gameState.correctCount} / 50</span></div>
-                    </div>
-
-                    <div class="text-xs text-slate-500 mb-8">
-                        Tanggal: <b>${currentDate}</b>
-                    </div>
-
-                    <div class="border-t border-slate-200 pt-4 flex justify-between items-center text-xs text-slate-500">
-                        <div>Pengembang: <b>Giga Inovation</b></div>
-                        <div>Kontak: <b>081329200985</b></div>
-                    </div>
-
-                    <div class="mt-6 flex flex-col sm:flex-row justify-center gap-4">
-                        <button onclick="window.print()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow text-sm transition">
-                            🖨️ CETAK / SIMPAN SERTIFIKAT
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <button onclick="goToCertificate()" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow transition text-xs flex items-center justify-center gap-2 pulse-btn">
+                            <span>📜</span> LIHAT & CETAK SERTIFIKAT
                         </button>
-                        <button onclick="restartQuiz()" class="px-6 py-3 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl shadow text-sm transition">
-                            🔄 ULANGI KUIS
+                        <button onclick="restartQuiz()" class="w-full py-3.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-2xl text-xs transition">
+                            🔄 Ulangi Kuis
                         </button>
                     </div>
                 </div>
             `;
+        }
+
+        function goToCertificate() {
+            gameState.step = 'certificate';
+            renderApp();
+        }
+
+        function renderCertificateScreen() {
+            return `
+                <div class="bg-white rounded-3xl card-shadow p-6 sm:p-10 border-8 border-amber-400 max-w-2xl mx-auto text-center relative overflow-hidden">
+                    <div class="absolute -top-10 -left-10 w-32 h-32 bg-amber-100 rounded-full opacity-50 pointer-events-none"></div>
+                    <div class="absolute -bottom-10 -right-10 w-32 h-32 bg-emerald-100 rounded-full opacity-50 pointer-events-none"></div>
+
+                    <div class="text-3xl mb-1">🎖️</div>
+                    <h4 class="text-xs uppercase font-extrabold tracking-widest text-amber-600 mb-1">Sertifikat Penyelesaian Resmi</h4>
+                    <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-800 mb-3">PETUALANGAN IPAS KELAS 5 SD/MI</h2>
+                    <p class="text-xs text-slate-500 mb-6">Sertifikat ini diberikan dengan bangga kepada:</p>
+
+                    <div class="text-2xl sm:text-3xl font-extrabold text-emerald-700 underline decoration-amber-400 decoration-wavy underline-offset-8 mb-6">
+                        ${gameState.studentName}
+                    </div>
+
+                    <p class="text-xs sm:text-sm text-slate-600 max-w-lg mx-auto leading-relaxed mb-6">
+                        Atas keberhasilan luar biasa dalam menyelesaikan 50 soal uji kompetensi IPAS Bab 1 sampai Bab 4 dengan perolehan skor akhir <b>${gameState.score} / 1000</b>.
+                    </p>
+
+                    <div class="flex justify-between items-center pt-6 border-t border-slate-200 text-left text-xs text-slate-500">
+                        <div>
+                            <div class="font-bold text-slate-800">Giga Inovation</div>
+                            <div>Kontak: 081329200985</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-emerald-700">Terverifikasi Resmi</div>
+                            <div>Sistem Pembelajaran Digital</div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex gap-3 justify-center">
+                        <button onclick="window.print()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition">
+                            🖨️ Cetak / Simpan Sertifikat
+                        </button>
+                        <button onclick="restartQuiz()" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+                            🏠 Kembali ke Beranda
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Mini Game Canvas Implementation
+        let gameLoopInterval = null;
+        let gameObj = {
+            running: false,
+            score: 0,
+            basketX: 150,
+            items: [],
+            speed: 3,
+            spawnTimer: 0,
+            lives: 3
+        };
+
+        function renderMiniGameScreen() {
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <div class="bg-white rounded-3xl card-shadow p-4 sm:p-6 border-4 border-amber-400 flex flex-col items-center max-w-2xl mx-auto w-full">
+                    <div class="w-full flex justify-between items-center mb-4 pb-3 border-b border-slate-200">
+                        <div>
+                            <h2 class="text-xl sm:text-2xl font-extrabold text-amber-700">🕹️ MINI GAME: PENJELAJAH IPAS</h2>
+                            <p class="text-slate-600 text-xs">Tangkap tetesan air bersih (💧) dan tumbuhan (🌱), hindari sampah (🗑️)!</p>
+                        </div>
+                        <button onclick="switchTab('quiz')" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs">
+                            ⬅ KEMBALI
+                        </button>
+                    </div>
+
+                    <div class="flex justify-between w-full max-w-lg mb-2 px-2 text-sm font-bold text-slate-700">
+                        <span>👤 ${gameState.studentName || 'Siswa'}</span>
+                        <span id="miniGameScore" class="text-emerald-600">⭐ Skor: 0</span>
+                        <span id="miniGameLives" class="text-rose-600">❤️ Nyawa: 3</span>
+                    </div>
+
+                    <div class="relative w-full max-w-lg bg-slate-900 rounded-2xl overflow-hidden border-4 border-slate-700 shadow-inner">
+                        <canvas id="ipasGameCanvas" width="400" height="350" class="w-full h-[300px] sm:h-[350px] bg-gradient-to-b from-sky-300 to-emerald-800 block cursor-pointer"></canvas>
+                        
+                        <div id="gameOverlay" class="absolute inset-0 bg-slate-900/80 backdrop-blur-xs flex flex-col items-center justify-center text-center p-6">
+                            <div class="text-4xl mb-2">💧🌳</div>
+                            <h3 class="text-xl font-extrabold text-white mb-2">Siap Bermain?</h3>
+                            <p class="text-slate-300 text-xs mb-4">Tangkap barang bermanfaat dan hindari sampah plastik!</p>
+                            <button onclick="startMiniGame()" class="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow text-sm pulse-btn">
+                                🚀 MULAI GAME SEKARANG
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4 mt-4 w-full max-w-lg justify-center">
+                        <button onmousedown="moveBasketLeft()" ontouchstart="moveBasketLeft()" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow text-lg active:scale-95 transition">◀ KIRI</button>
+                        <button onmousedown="moveBasketRight()" ontouchstart="moveBasketRight()" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow text-lg active:scale-95 transition">KANAN ▶</button>
+                    </div>
+                </div>
+            `;
+            initCanvasEvents();
+        }
+
+        function initCanvasEvents() {
+            const canvas = document.getElementById('ipasGameCanvas');
+            if (!canvas) return;
+            
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                gameObj.basketX = (e.clientX - rect.left) * scaleX - 30;
+                if (gameObj.basketX < 0) gameObj.basketX = 0;
+                if (gameObj.basketX > canvas.width - 60) gameObj.basketX = canvas.width - 60;
+            });
+
+            canvas.addEventListener('touchmove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                if (e.touches.length > 0) {
+                    gameObj.basketX = (e.touches[0].clientX - rect.left) * scaleX - 30;
+                    if (gameObj.basketX < 0) gameObj.basketX = 0;
+                    if (gameObj.basketX > canvas.width - 60) gameObj.basketX = canvas.width - 60;
+                }
+            });
+        }
+
+        function moveBasketLeft() {
+            gameObj.basketX = Math.max(0, gameObj.basketX - 35);
+        }
+
+        function moveBasketRight() {
+            const canvas = document.getElementById('ipasGameCanvas');
+            const maxW = canvas ? canvas.width : 400;
+            gameObj.basketX = Math.min(maxW - 60, gameObj.basketX + 35);
+        }
+
+        function startMiniGame() {
+            const overlay = document.getElementById('gameOverlay');
+            if (overlay) overlay.classList.add('hidden');
+
+            gameObj.running = true;
+            gameObj.score = 0;
+            gameObj.lives = 3;
+            gameObj.basketX = 170;
+            gameObj.items = [];
+            gameObj.spawnTimer = 0;
+            gameObj.speed = 3;
+
+            if (gameLoopInterval) clearInterval(gameLoopInterval);
+            gameLoopInterval = setInterval(updateMiniGame, 1000 / 60);
+        }
+
+        function updateMiniGame() {
+            if (!gameObj.running) return;
+            const canvas = document.getElementById('ipasGameCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#0284c7';
+            ctx.fillRect(0, 0, canvas.width, 100);
+            ctx.fillStyle = '#059669';
+            ctx.fillRect(0, 100, canvas.width, canvas.height - 100);
+
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(60, 50, 25, 0, Math.PI * 2);
+            ctx.fill();
+
+            gameObj.spawnTimer++;
+            if (gameObj.spawnTimer % 45 === 0) {
+                const types = [
+                    { type: 'water', emoji: '💧', points: 10, isGood: true },
+                    { type: 'plant', emoji: '🌱', points: 15, isGood: true },
+                    { type: 'trash', emoji: '🗑️', points: -10, isGood: false }
+                ];
+                const selected = types[Math.floor(Math.random() * types.length)];
+                gameObj.items.push({
+                    x: Math.random() * (canvas.width - 40),
+                    y: -30,
+                    speed: 2.5 + Math.random() * 2,
+                    ...selected
+                });
+            }
+
+            for (let i = gameObj.items.length - 1; i >= 0; i--) {
+                let item = gameObj.items[i];
+                item.y += item.speed;
+
+                ctx.font = '26px sans-serif';
+                ctx.fillText(item.emoji, item.x, item.y);
+
+                if (
+                    item.y >= 290 && item.y <= 325 &&
+                    item.x >= gameObj.basketX - 10 && item.x <= gameObj.basketX + 55
+                ) {
+                    if (item.isGood) {
+                        gameObj.score += item.points;
+                        speakText("Hebat!");
+                    } else {
+                        gameObj.lives--;
+                        speakText("Aduh, sampah!");
+                        if (gameObj.lives <= 0) {
+                            endMiniGame();
+                        }
+                    }
+                    gameObj.items.splice(i, 1);
+                    continue;
+                }
+
+                if (item.y > canvas.height + 30) {
+                    gameObj.items.splice(i, 1);
+                }
+            }
+
+            ctx.fillStyle = '#b45309';
+            ctx.fillRect(gameObj.basketX, 305, 60, 25);
+            ctx.fillStyle = '#78350f';
+            ctx.fillRect(gameObj.basketX + 5, 300, 50, 8);
+
+            const scoreEl = document.getElementById('miniGameScore');
+            const livesEl = document.getElementById('miniGameLives');
+            if (scoreEl) scoreEl.innerText = `⭐ Skor: ${gameObj.score}`;
+            if (livesEl) {
+                let hearts = '';
+                for (let i = 0; i < 3; i++) {
+                    hearts += i < gameObj.lives ? '❤️' : '🖤';
+                }
+                livesEl.innerText = `Nyawa: ${hearts}`;
+            }
+        }
+
+        function endMiniGame() {
+            gameObj.running = false;
+            if (gameLoopInterval) clearInterval(gameLoopInterval);
+
+            gameState.score += gameObj.score;
+
+            const overlay = document.getElementById('gameOverlay');
+            if (overlay) {
+                overlay.classList.remove('hidden');
+                overlay.innerHTML = `
+                    <div class="text-4xl mb-2">🏁</div>
+                    <h3 class="text-xl font-extrabold text-white mb-1">Permainan Selesai!</h3>
+                    <p class="text-emerald-400 font-bold text-sm mb-2">Skor Mini Game Kamu: +${gameObj.score}</p>
+                    <p class="text-slate-300 text-xs mb-4">Total skor kuis & game tersimpan!</p>
+                    <div class="flex gap-2 justify-center">
+                        <button onclick="startMiniGame()" class="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs">
+                            🔄 Main Lagi
+                        </button>
+                        <button onclick="switchTab('quiz')" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs">
+                            🎯 Lanjut Kuis Soal
+                        </button>
+                    </div>
+                `;
+            }
         }
     </script>
 </body>
